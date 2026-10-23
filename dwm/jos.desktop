@@ -1,0 +1,7 @@
+[Desktop Entry]
+Name=jOS
+Comment=tiling and floating desktop bundle
+Exec=@PREFIX@/bin/dwm-session
+TryExec=/bin/sh
+Type=Application
+DesktopNames=dwm

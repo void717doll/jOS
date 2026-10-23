@@ -1,0 +1,139 @@
+#!/bin/bash
+set -eu
+export LC_ALL=C
+
+notify() {
+	if command -v dunstify >/dev/null 2>&1; then
+		timeout 2 dunstify -a dwm 'bluetooth' "$*" || :
+	fi
+}
+
+fail() {
+	printf 'dwm: %s\n' "$*" >&2
+	notify "$*"
+	exit 1
+}
+
+terminal() {
+	for program in st stterm xterm; do
+		if command -v "$program" >/dev/null 2>&1; then
+			exec "$program" -e "$@"
+		fi
+	done
+	fail 'bluetooth pairing needs st or xterm'
+}
+
+is_yes() {
+	printf '%s\n' "$1" | grep -Eq "^[[:blank:]]*$2:[[:blank:]]+yes[[:blank:]]*$"
+}
+
+if [ "${1:-}" = --status ] || [ "${1:-}" = --color ]; then
+	state=n/a
+	color=5
+	controller=$(timeout 2 bluetoothctl show 2>/dev/null) || controller=
+	if [[ "$controller" =~ Controller[[:space:]] ]]; then
+		state=off
+		if is_yes "$controller" Powered; then
+			state=on
+			color=4
+		fi
+	fi
+	if [ "$1" = --color ]; then
+		printf "\030\\00${color} %s\031\001\n" "$state"
+	else
+		printf ' %s\n' "$state"
+	fi
+	exit 0
+fi
+
+command -v bluetoothctl >/dev/null 2>&1 || fail 'bluetooth needs bluez'
+if [ "${1:-}" = --pair ] && [ "$#" -eq 2 ]; then
+	address=$2
+	[[ "$address" =~ ^([[:xdigit:]]{2}:){5}[[:xdigit:]]{2}$ ]] || fail 'invalid device address'
+	info=$(timeout 5 bluetoothctl info "$address") || fail 'could not read bluetooth device'
+	# pairing an already paired device can remove its existing bond on older bluez.
+	if ! is_yes "$info" Paired; then
+		printf 'confirm any pairing prompts, then type quit when finished.\n'
+		# command-line pairing disables pin prompts; keep an interactive input stream.
+		exec {input}< <(printf 'pair %s\n' "$address"; exec cat)
+		input_pid=$!
+		trap 'kill "$input_pid" 2>/dev/null || :' EXIT
+		timeout 120 bluetoothctl --agent KeyboardDisplay <&"$input" || fail 'could not pair bluetooth device'
+		kill "$input_pid" 2>/dev/null || :
+		wait "$input_pid" 2>/dev/null || :
+		exec {input}<&-
+		trap - EXIT
+		info=$(timeout 5 bluetoothctl info "$address") || fail 'could not read bluetooth device'
+		is_yes "$info" Paired || fail 'bluetooth pairing did not finish'
+	fi
+	timeout 5 bluetoothctl trust "$address" || fail 'could not trust bluetooth device'
+	if ! is_yes "$info" Connected; then
+		timeout 30 bluetoothctl connect "$address" || fail 'could not connect bluetooth device'
+	fi
+	notify 'paired and connected'
+	exit 0
+fi
+[ "$#" -eq 0 ] || exit 1
+command -v dmenu >/dev/null 2>&1 || fail 'bluetooth menu needs dmenu'
+controller=$(timeout 5 bluetoothctl show) || fail 'could not read bluetooth controller; check the bluetooth service'
+[[ "$controller" =~ Controller[[:space:]] ]] || fail 'no bluetooth controller available'
+labels=()
+addresses=()
+if is_yes "$controller" Powered; then
+	devices=$(timeout 5 bluetoothctl devices) || fail 'could not read bluetooth devices'
+	while IFS= read -r device; do
+		[[ "$device" =~ ^Device[[:space:]]+(([[:xdigit:]]{2}:){5}[[:xdigit:]]{2})[[:space:]]+(.*)$ ]] || continue
+		address=${BASH_REMATCH[1]}
+		name=$(printf '%s' "${BASH_REMATCH[3]}" | tr -d '[:cntrl:]')
+		labels+=("$name [$address]")
+		addresses+=("$address")
+	done <<< "$devices"
+	labels+=('scan for devices' 'disable bluetooth')
+else
+	labels+=('enable bluetooth')
+fi
+choice=$(printf '%s\n' "${labels[@]}" 'advanced' | dmenu -i -l 12 -p 'bluetooth') || exit 0
+case "$choice" in
+'scan for devices')
+	notify 'scanning for 8 seconds'
+	timeout 15 bluetoothctl --timeout 8 scan on >/dev/null || fail 'could not scan bluetooth devices'
+	exec "$0"
+	;;
+'enable bluetooth')
+	timeout 5 bluetoothctl power on || fail 'could not enable bluetooth; check the hardware switch'
+	exec "$0"
+	;;
+'disable bluetooth') timeout 5 bluetoothctl power off || fail 'could not disable bluetooth'; exit 0 ;;
+advanced) terminal bluetoothctl --agent KeyboardDisplay ;;
+esac
+for i in "${!addresses[@]}"; do
+	[ "$choice" = "${labels[i]}" ] || continue
+	address=${addresses[i]}
+	info=$(timeout 5 bluetoothctl info "$address") || fail 'could not read bluetooth device'
+	actions=()
+	if is_yes "$info" Connected; then
+		actions+=('disconnect')
+	elif is_yes "$info" Paired; then
+		actions+=('connect')
+	else
+		actions+=('pair and connect')
+	fi
+	if is_yes "$info" Trusted; then
+		actions+=('untrust')
+	else
+		actions+=('trust')
+	fi
+	action=$(printf '%s\n' "${actions[@]}" 'forget' | dmenu -i -l 6 -p "$choice") || exit 0
+	case "$action" in
+	'pair and connect') terminal "$0" --pair "$address" ;;
+	connect|disconnect|trust|untrust)
+		timeout 30 bluetoothctl "$action" "$address" || fail "could not $action bluetooth device"
+		;;
+	forget)
+		confirm=$(printf 'cancel\nforget\n' | dmenu -i -p "forget $choice?") || exit 0
+		[ "$confirm" = forget ] || exit 0
+		timeout 5 bluetoothctl remove "$address" || fail 'could not forget bluetooth device'
+		;;
+	esac
+	exit 0
+done

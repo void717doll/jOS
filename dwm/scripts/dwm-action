@@ -1,0 +1,122 @@
+#!/bin/sh
+set -eu
+
+fail() {
+	printf 'dwm: %s\n' "$*" >&2
+	if command -v dunstify >/dev/null 2>&1; then
+		timeout 2 dunstify -a dwm -u critical 'desktop action failed' "$*" || :
+	fi
+	exit 1
+}
+
+action=${1:-}
+bindir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+case "$action" in
+network)
+	exec "$bindir/dwm-network"
+	;;
+bluetooth)
+	exec "$bindir/dwm-bluetooth"
+	;;
+logout)
+	choice=$(printf 'cancel\nlog out\n' | dmenu -i -p 'session:') || exit 0
+	[ "$choice" = 'log out' ] || exit 0
+	exec xprop -root -f _DWM_LOGOUT 8s -set _DWM_LOGOUT yes
+	;;
+volume-up|volume-down|volume-up-small|volume-down-small|mute|mic-mute)
+	command -v pactl >/dev/null 2>&1 || fail 'audio controls need pactl'
+	case "$action" in
+	volume-*)
+		case "$action" in
+		volume-up) step=5 ;;
+		volume-down) step=-5 ;;
+		volume-up-small) step=1 ;;
+		volume-down-small) step=-1 ;;
+		esac
+		levels=$(LC_ALL=C pactl get-sink-volume @DEFAULT_SINK@) || fail 'could not read audio volume'
+		targets=$(printf '%s\n' "$levels" | awk -v step="$step" '{
+			for (i = 1; i <= NF; i++) {
+				if ($i !~ /^[0-9]+%$/) continue
+				sub(/%$/, "", $i)
+				value = $i + step
+				if (value < 0) value = 0
+				if (value > 100) value = 100
+				printf "%d%%\n", value
+			}
+		}')
+		[ -n "$targets" ] || fail 'could not read audio volume'
+		# targets contains only numeric percentages, one per audio channel.
+		set -- $targets
+		pactl set-sink-volume @DEFAULT_SINK@ "$@"
+		;;
+	mute) pactl set-sink-mute @DEFAULT_SINK@ toggle ;;
+	mic-mute) pactl set-source-mute @DEFAULT_SOURCE@ toggle ;;
+	esac
+	if [ "$action" = mic-mute ]; then
+		exec "$bindir/dwm-status" --notify microphone
+	fi
+	exec "$bindir/dwm-status" --notify volume
+	;;
+brightness-*)
+	case "$action" in
+	brightness-up) value=+10%; direction=-inc; step=10 ;;
+	brightness-down) value=10%-; direction=-dec; step=10 ;;
+	brightness-up-small) value=+1%; direction=-inc; step=1 ;;
+	brightness-down-small) value=1%-; direction=-dec; step=1 ;;
+	*) fail 'unknown brightness action' ;;
+	esac
+	if command -v brightnessctl >/dev/null 2>&1; then
+		brightnessctl -c backlight --min-value=1 set "$value" || fail 'could not change brightness; check backlight permissions'
+	elif command -v xbacklight >/dev/null 2>&1; then
+		xbacklight "$direction" "$step"
+	else
+		fail 'brightness controls need brightnessctl or xbacklight'
+	fi
+	exec "$bindir/dwm-status" --notify brightness
+	;;
+PlayPause|Pause|Next|Previous|Stop)
+	command -v dbus-send >/dev/null 2>&1 || fail 'media controls need dbus-send'
+	players=$(timeout 2 dbus-send --session --print-reply --dest=org.freedesktop.DBus \
+		/org/freedesktop/DBus org.freedesktop.DBus.ListNames |
+		awk -F '"' '/string "org\.mpris\.MediaPlayer2\./ { print $2 }')
+	selected=
+	for player in $players; do
+		[ -n "$selected" ] || selected=$player
+		status=$(timeout 2 dbus-send --session --print-reply --dest="$player" \
+			/org/mpris/MediaPlayer2 org.freedesktop.DBus.Properties.Get \
+			string:org.mpris.MediaPlayer2.Player string:PlaybackStatus 2>/dev/null) || continue
+		case "$status" in
+		*'"Playing"'*)
+			selected=$player
+			break
+			;;
+		esac
+	done
+	[ -n "$selected" ] || exit 0
+	exec timeout 2 dbus-send --session --print-reply --dest="$selected" \
+		/org/mpris/MediaPlayer2 "org.mpris.MediaPlayer2.Player.$action"
+	;;
+lock)
+	exec "$bindir/dwm-lock"
+	;;
+clipboard)
+	if command -v copyq >/dev/null 2>&1; then
+		exec copyq toggle
+	fi
+	fail 'clipboard history needs copyq'
+	;;
+screenshot)
+	command -v flameshot >/dev/null 2>&1 || fail 'screenshots need flameshot'
+	exec flameshot gui
+	;;
+emoji)
+	data=/usr/share/unicode/emoji/emoji-test.txt
+	[ -r "$data" ] || fail 'emoji selection needs unicode-data'
+	command -v xclip >/dev/null 2>&1 || fail 'emoji selection needs xclip'
+	choice=$(awk -F '# ' '/; fully-qualified/ { sub(/ E[0-9.]+ /, " ", $2); print $2 }' "$data" |
+		dmenu -i -l 12 -p 'emoji:') || exit 0
+	[ -n "$choice" ] || exit 0
+	printf '%s' "${choice%% *}" | xclip -selection clipboard
+	;;
+*) fail 'unknown desktop action' ;;
+esac

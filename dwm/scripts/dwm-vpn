@@ -1,0 +1,80 @@
+#!/bin/bash
+set -eu
+export LC_ALL=C
+# openvpn is usually installed in sbin, outside the desktop user's path.
+export PATH="$PATH:/usr/sbin:/sbin"
+
+for program in openvpn nmcli dmenu; do
+	command -v "$program" >/dev/null 2>&1 || exit 0
+done
+
+notify() {
+	if command -v dunstify >/dev/null 2>&1; then
+		timeout 2 dunstify -a dwm 'openvpn' "$*" || :
+	fi
+}
+
+fail() {
+	printf 'dwm: %s\n' "$*" >&2
+	notify "$*"
+	exit 1
+}
+
+if [ "${1:-}" = --connect ] && [ "$#" -eq 2 ]; then
+	uuid=$2
+	service=$(timeout 5 nmcli -g vpn.service-type connection show uuid "$uuid") || fail 'could not read vpn profile'
+	[ "$service" = org.freedesktop.NetworkManager.openvpn ] || exit 0
+	name=$(timeout 5 nmcli --escape no -g connection.id connection show uuid "$uuid") || fail 'could not read vpn profile'
+	name=$(printf '%s' "$name" | tr '\n\r\t' '   ')
+	active=$(timeout 5 nmcli -t -f TYPE,UUID connection show --active) || fail 'could not read active connections'
+	while IFS=: read -r type active_uuid; do
+		[ "$type" = vpn ] && [ "$active_uuid" != "$uuid" ] || continue
+		nmcli --wait 15 connection down uuid "$active_uuid" || fail 'could not disconnect previous vpn'
+	done <<< "$active"
+	nmcli --ask --wait 60 connection up uuid "$uuid" || fail 'could not connect vpn'
+	notify "connected to $name"
+	exit 0
+fi
+[ "$#" -eq 0 ] || exit 0
+
+profiles=$(timeout 5 nmcli -t -f UUID,TYPE connection show) || fail 'could not read saved connections'
+active=$(timeout 5 nmcli -g UUID connection show --active) || fail 'could not read active connections'
+labels=()
+uuids=()
+actions=()
+while IFS=: read -r uuid type; do
+	[ "$type" = vpn ] || continue
+	service=$(timeout 5 nmcli -g vpn.service-type connection show uuid "$uuid") || continue
+	[ "$service" = org.freedesktop.NetworkManager.openvpn ] || continue
+	name=$(timeout 5 nmcli --escape no -g connection.id connection show uuid "$uuid") || continue
+	name=$(printf '%s' "$name" | tr '\n\r\t' '   ')
+	action=connect
+	case $'\n'"$active"$'\n' in
+	*$'\n'"$uuid"$'\n'*) action=disconnect ;;
+	esac
+	labels+=("$((${#labels[@]} + 1)). $action: $name")
+	uuids+=("$uuid")
+	actions+=("$action")
+done <<< "$profiles"
+
+if [ "${#labels[@]}" -eq 0 ]; then
+	notify 'no saved openvpn profiles in networkmanager'
+	exit 0
+fi
+choice=$(printf '%s\n' "${labels[@]}" | dmenu -i -l 10 -p 'openvpn:') || exit 0
+for i in "${!labels[@]}"; do
+	[ "$choice" = "${labels[i]}" ] || continue
+	if [ "${actions[i]}" = disconnect ]; then
+		nmcli --wait 15 connection down uuid "${uuids[i]}" || fail 'could not disconnect vpn'
+		notify 'vpn disconnected'
+	else
+		# nmcli asks for missing passwords here without a gnome secret agent.
+		for terminal in st stterm xterm; do
+			if command -v "$terminal" >/dev/null 2>&1; then
+				exec "$terminal" -e "$0" --connect "${uuids[i]}"
+			fi
+		done
+		fail 'vpn password prompts need st or xterm'
+	fi
+	exit 0
+done

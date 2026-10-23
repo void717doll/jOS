@@ -1,0 +1,188 @@
+#!/bin/bash
+set -eu
+
+state_dir=${XDG_STATE_HOME:-"$HOME/.local/state"}/dwm/mounts
+mkdir -p "$state_dir"
+
+notify() {
+	command -v dunstify >/dev/null 2>&1 || return 0
+	timeout 2 dunstify -a dwm-storage -u low -t 6000 "$1" "$2" || :
+}
+
+properties() {
+	udevadm info --query=property --name="$1" 2>/dev/null || :
+}
+
+property() {
+	printf '%s\n' "$2" | sed -n "s/^$1=//p" | head -n 1
+}
+
+usb_device() {
+	[ "$(property ID_BUS "$(properties "$1")")" = usb ]
+}
+
+mountpoint_for() {
+	findmnt --source "$1" --noheadings --output TARGET 2>/dev/null | head -n 1 || :
+}
+
+mount_state_file() {
+	printf '%s/mount-%s\n' "$state_dir" "${1##*/}"
+}
+
+remember_mount() {
+	printf '%s\n' "$2" > "$(mount_state_file "$1")"
+}
+
+mount_device() {
+	device=$1
+	live=${2:-no}
+	[ -n "$device" ] || return 0
+	props=$(properties "$device")
+	[ "$(property ID_BUS "$props")" = usb ] || return 0
+	type=$(lsblk --noheadings --nodeps --output TYPE "$device" 2>/dev/null | tr -d ' ')
+	filesystem=$(lsblk --noheadings --nodeps --output FSTYPE "$device" 2>/dev/null | tr -d ' ')
+	[ "$type" = part ] && [ -n "$filesystem" ] || return 0
+	state_file=$(mount_state_file "$device")
+	current=$(mountpoint_for "$device")
+	if [ -n "$current" ]; then
+		previous=
+		[ ! -r "$state_file" ] || previous=$(cat "$state_file")
+		remember_mount "$device" "$current"
+		if [ "$live" = yes ] && [ "$previous" != "$current" ]; then
+			name=$(lsblk --noheadings --nodeps --output LABEL "$device" 2>/dev/null | sed 's/[[:space:]]*$//')
+			notify 'disk mounted' "${name:-${device##*/}} mounted at $current"
+		fi
+		return 0
+	fi
+	result=$(udisksctl mount --block-device "$device" 2>&1) || result=
+	current=$(mountpoint_for "$device")
+	if [ -n "$current" ]; then
+		previous=
+		[ ! -r "$state_file" ] || previous=$(cat "$state_file")
+		remember_mount "$device" "$current"
+		if [ -n "$result" ] || [ -n "$previous" ]; then
+			notify 'disk mounted' "${result:-${device##*/} mounted at $current}"
+		fi
+	else
+		[ -f "$state_file" ] || remember_mount "$device" ''
+	fi
+}
+
+remember_drive() {
+	device=$1
+	props=$(properties "$device")
+	[ "$(property ID_BUS "$props")" = usb ] || return 0
+	model=$(property ID_MODEL_FROM_DATABASE "$props")
+	[ -n "$model" ] || model=$(property ID_MODEL "$props")
+	model=$(printf '%s' "${model:-${device##*/}}" | tr '_' ' ' | tr '\n\r\t' '   ')
+	printf '%s\n' "$model" > "$state_dir/drive-${device##*/}"
+}
+
+check_mount_states() {
+	lsblk --noheadings --paths --output NAME,TYPE,FSTYPE 2>/dev/null |
+	while read -r device type filesystem; do
+		[ "$type" = part ] && [ -n "$filesystem" ] || continue
+		usb_device "$device" || continue
+		state_file=$(mount_state_file "$device")
+		current=$(mountpoint_for "$device")
+		if [ ! -f "$state_file" ]; then
+			remember_mount "$device" "$current"
+		elif [ "$(cat "$state_file")" != "$current" ]; then
+			name=$(lsblk --noheadings --nodeps --output LABEL "$device" 2>/dev/null | sed 's/[[:space:]]*$//')
+			name=${name:-${device##*/}}
+			if [ -n "$current" ]; then
+				notify 'disk mounted' "$name mounted at $current"
+			else
+				notify 'disk unmounted' "$name"
+			fi
+			remember_mount "$device" "$current"
+		fi
+	done
+}
+
+remove_drive() {
+	device=$1
+	identity_file=$state_dir/drive-${device##*/}
+	[ -r "$identity_file" ] || return 0
+	model=$(cat "$identity_file")
+	body=$model
+	for state_file in "$state_dir"/mount-"${device##*/}"*; do
+		[ -r "$state_file" ] || continue
+		mountpoint=$(cat "$state_file")
+		[ -n "$mountpoint" ] && printf -v body '%s\nwas mounted at %s' "$body" "$mountpoint"
+		rm -f "$state_file"
+	done
+	notify 'device disconnected' "$body"
+	rm -f "$identity_file"
+}
+
+scan() {
+	lsblk --noheadings --paths --output NAME,TYPE,FSTYPE 2>/dev/null |
+	while read -r device type filesystem; do
+		if [ "$type" = disk ]; then
+			remember_drive "$device"
+		elif [ "$type" = part ] && [ -n "$filesystem" ]; then
+			mount_device "$device"
+		fi
+	done
+}
+
+scan
+[ "${1:-}" != --once ] || exit 0
+command -v udevadm >/dev/null 2>&1 || exit 0
+command -v udisksctl >/dev/null 2>&1 || exit 0
+
+events=$(mktemp -d) || exit 1
+monitor=
+cleanup() {
+	if [ -n "$monitor" ]; then
+		kill "$monitor" 2>/dev/null || :
+		wait "$monitor" 2>/dev/null || :
+	fi
+	exec 3<&-
+	rm -f "$events/block"
+	rmdir "$events"
+}
+trap cleanup EXIT
+trap 'exit 0' HUP INT TERM
+mkfifo "$events/block"
+udevadm monitor --udev --property --subsystem-match=block > "$events/block" 2>/dev/null &
+monitor=$!
+exec 3< "$events/block"
+action=
+device=
+devtype=
+while :; do
+	if IFS= read -r -t 2 -u 3 line; then
+		case "$line" in
+		ACTION=*) action=${line#ACTION=} ;;
+		DEVNAME=*) device=${line#DEVNAME=} ;;
+		DEVTYPE=*) devtype=${line#DEVTYPE=} ;;
+		'')
+			case "$action:$devtype" in
+			add:disk)
+				remember_drive "$device"
+				identity_file=$state_dir/drive-${device##*/}
+				if [ -r "$identity_file" ]; then
+					model=$(cat "$identity_file")
+					notify 'device connected' "$model"
+				fi
+				;;
+			add:partition) mount_device "$device" yes ;;
+			remove:disk) remove_drive "$device" ;;
+			esac
+			check_mount_states
+			action=
+			device=
+			devtype=
+			;;
+		esac
+	else
+		read_status=$?
+		check_mount_states
+		if [ "$read_status" -eq 1 ]; then
+			wait "$monitor" 2>/dev/null || :
+			break
+		fi
+	fi
+done

@@ -1,0 +1,7 @@
+*.o
+/config.h
+/dmenu
+/stest
+*.tar.gz
+*.orig
+*.rej

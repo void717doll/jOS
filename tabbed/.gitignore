@@ -1,0 +1,5 @@
+*.o
+/config.h
+/tabbed
+/xembed
+*.tar.gz

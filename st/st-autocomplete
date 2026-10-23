@@ -1,0 +1,51 @@
+#!/usr/bin/perl
+# screen completion modes from the suckless autocomplete patch.
+use strict;
+use warnings;
+use utf8;
+binmode STDIN, ':encoding(UTF-8)';
+binmode STDOUT, ':encoding(UTF-8)';
+
+my ($mode, $row, $column) = @ARGV;
+die "usage: st-autocomplete mode row column\n" unless
+    defined($column) && $row =~ /^\d+$/ && $column =~ /^\d+$/;
+my @lines = <STDIN>;
+chomp @lines;
+die "invalid cursor row\n" if $row > $#lines;
+s/[\p{Cc}\p{Cf}]/ /g for @lines;
+my $prefix = substr($lines[$row], 0, $column);
+my $wordclass = $mode =~ /^(word|fuzzy-word)-complete$/ ? qr/[-\w]/ : qr/\S/;
+my ($target) = $prefix =~ /($wordclass+)$/;
+$target //= '';
+print "$target\n";
+exit 0 unless length $target;
+
+my $pattern = $mode =~ /^(word|WORD)-complete$/
+    ? quotemeta($target)
+    : join($mode eq 'fuzzy-complete' || $mode eq 'surround-complete' ? '.*?' : "$wordclass*",
+           map { quotemeta($_) } split //, $target);
+my %seen = ($target => 1);
+my @order = (reverse(0 .. $row), reverse($row + 1 .. $#lines));
+for my $line_number (@order) {
+    my $text = $lines[$line_number];
+    # the current prefix is input, not a completion candidate.
+    substr($text, $column - length($target), length($target)) = ' ' x length($target)
+        if $line_number == $row;
+    my @matches;
+    if ($mode eq 'surround-complete') {
+        while ($text =~ /(["'`])(.*?)\1|\[([^\]]*)\]|\(([^)]*)\)|\{([^}]*)\}/g) {
+            my $inside = defined($2) ? $2 : defined($3) ? $3 : defined($4) ? $4 : $5;
+            push @matches, $inside if $inside =~ /$pattern/i;
+        }
+    } elsif ($mode eq 'suffix-complete') {
+        @matches = $text =~ /($pattern\S*)/gi;
+    } elsif ($mode eq 'fuzzy-complete') {
+        @matches = $text =~ /(?<!\w)($pattern\w*)/gi;
+    } else {
+        @matches = $text =~ /(?<!$wordclass)($pattern$wordclass*)/gi;
+    }
+    for my $completion (reverse @matches) {
+        next if $seen{$completion}++;
+        print "$completion\n";
+    }
+}

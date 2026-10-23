@@ -1,0 +1,204 @@
+#!/bin/sh
+set -eu
+
+if [ -z "${DISPLAY:-}" ] || [ "${XDG_SESSION_TYPE:-x11}" = wayland ]; then
+	printf 'dwm needs an x11 session\n' >&2
+	exit 1
+fi
+
+bindir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+PATH="$bindir:$HOME/.local/bin:$HOME/Nextcloud/bin:$PATH"
+export PATH
+TERMINFO_DIRS="$bindir/../share/terminfo:${TERMINFO_DIRS:-}"
+export TERMINFO_DIRS
+export XDG_CURRENT_DESKTOP=dwm
+export XDG_SESSION_DESKTOP=dwm
+export XDG_SESSION_TYPE=x11
+export XDG_MENU_PREFIX=${XDG_MENU_PREFIX:-}
+if [ -z "$XDG_MENU_PREFIX" ]; then
+	menu_dirs=${XDG_CONFIG_HOME:-"$HOME/.config"}:${XDG_CONFIG_DIRS:-/etc/xdg}
+	previous_ifs=$IFS
+	IFS=:
+	for directory in $menu_dirs; do
+		for prefix in plasma- kf5-; do
+			if [ -r "$directory/menus/${prefix}applications.menu" ]; then
+				XDG_MENU_PREFIX=$prefix
+				break 2
+			fi
+		done
+	done
+	IFS=$previous_ifs
+fi
+
+if [ -z "${DBUS_SESSION_BUS_ADDRESS:-}" ]; then
+	if [ -n "${XDG_RUNTIME_DIR:-}" ] && [ -S "$XDG_RUNTIME_DIR/bus" ]; then
+		export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/bus"
+	else
+		exec dbus-run-session -- "$0" "$@"
+	fi
+fi
+
+state=${XDG_STATE_HOME:-"$HOME/.local/state"}/dwm
+mkdir -p "$state"
+if [ -f "$state/session.log" ]; then
+	mv -f "$state/session.log" "$state/session.previous.log"
+fi
+exec >>"$state/session.log" 2>&1
+printf 'dwm session starting: %s\n' "$(date -Iseconds)"
+
+children=
+start() {
+	if command -v "$1" >/dev/null 2>&1; then
+		"$@" &
+		children="$children $!"
+	else
+		printf 'dwm: missing startup helper: %s\n' "$1" >&2
+	fi
+}
+cleanup() {
+	for child in $children; do
+		kill "$child" 2>/dev/null || :
+	done
+}
+trap cleanup EXIT
+trap 'exit 0' HUP INT TERM
+
+"$bindir/dwm" &
+wm=$!
+children="$wm"
+ready=false
+attempt=0
+while [ "$attempt" -lt 50 ]; do
+	if ! kill -0 "$wm" 2>/dev/null; then
+		printf 'dwm exited during startup\n' >&2
+		wait "$wm"
+		exit 1
+	fi
+	checkwin=$(xprop -root _NET_SUPPORTING_WM_CHECK 2>/dev/null | awk '/window id/ { print $NF }')
+	case "$checkwin" in
+	0x*)
+		owner=$(xprop -id "$checkwin" _NET_WM_PID 2>/dev/null | awk '/ = / { print $NF }')
+		if [ "$owner" = "$wm" ]; then
+			ready=true
+			break
+		fi
+		;;
+	esac
+	attempt=$((attempt + 1))
+	sleep 0.1
+done
+if [ "$ready" != true ]; then
+	printf 'dwm did not finish startup; returning to the login screen\n' >&2
+	exit 1
+fi
+printf 'dwm ready: pid %s\n' "$wm"
+if command -v dbus-update-activation-environment >/dev/null 2>&1; then
+	timeout 5 dbus-update-activation-environment --systemd DISPLAY XAUTHORITY \
+		DBUS_SESSION_BUS_ADDRESS PATH TERMINFO_DIRS XDG_MENU_PREFIX XDG_CURRENT_DESKTOP XDG_SESSION_DESKTOP XDG_SESSION_TYPE || :
+fi
+for builder in kbuildsycoca6 kbuildsycoca5; do
+	if command -v "$builder" >/dev/null 2>&1; then
+		timeout 10 "$builder" || printf 'dwm: could not refresh kde application cache\n' >&2
+		break
+	fi
+done
+if command -v xinput >/dev/null 2>&1; then
+	for device in $(xinput list --id-only); do
+		if xinput list-props "$device" | grep -q 'libinput Disable While Typing Enabled ('; then
+			xinput set-prop "$device" 'libinput Disable While Typing Enabled' 0 ||
+				printf 'dwm: could not enable touchpad movement while typing\n' >&2
+		fi
+	done
+else
+	printf 'dwm: install xinput to enable touchpad movement while typing\n' >&2
+fi
+dunst_config="$bindir/../share/dwm/dunstrc"
+if [ -r "$bindir/dunstrc" ]; then
+	dunst_config="$bindir/dunstrc"
+fi
+if command -v dunst >/dev/null 2>&1; then
+	start dunst -conf "$dunst_config"
+	notifier=$!
+	notifications_ready=false
+	attempt=0
+	# wait for our daemon to own the bus name before other helpers send notifications.
+	while [ "$attempt" -lt 20 ] && kill -0 "$notifier" 2>/dev/null; do
+		owner=$(dbus-send --session --print-reply --reply-timeout=300 \
+			--dest=org.freedesktop.DBus /org/freedesktop/DBus \
+			org.freedesktop.DBus.GetConnectionUnixProcessID \
+			string:org.freedesktop.Notifications 2>/dev/null | awk '/uint32/ { print $2 }')
+		if [ "$owner" = "$notifier" ]; then
+			notifications_ready=true
+			printf 'dunst ready: pid %s\n' "$notifier"
+			break
+		fi
+		attempt=$((attempt + 1))
+		sleep 0.1
+	done
+	if [ "$notifications_ready" != true ]; then
+		printf 'dwm: dunst did not acquire the notification bus name; check errors above\n' >&2
+	fi
+else
+	printf 'dwm: dunst is missing; notifications are unavailable\n' >&2
+fi
+start lxpolkit
+picom_config="$bindir/../share/dwm/picom.conf"
+if [ -r "$bindir/picom.conf" ]; then
+	picom_config="$bindir/picom.conf"
+fi
+compositor_error=
+if command -v picom >/dev/null 2>&1; then
+	start picom --config "$picom_config"
+	compositor=$!
+	sleep 0.2
+	if ! kill -0 "$compositor" 2>/dev/null; then
+		compositor_error="picom exited during startup; check $state/session.log"
+	fi
+else
+	compositor_error='picom is missing; install it with your package manager, then log out and back in'
+fi
+if [ -n "$compositor_error" ]; then
+	printf 'dwm: %s\n' "$compositor_error" >&2
+	if command -v dunstify >/dev/null 2>&1; then
+		timeout 2 dunstify -a dwm -u critical 'compositor unavailable' "$compositor_error" || :
+	fi
+fi
+redshift_config="$bindir/../share/dwm/redshift.conf"
+if [ -r "$bindir/redshift.conf" ]; then
+	redshift_config="$bindir/redshift.conf"
+fi
+start redshift -c "$redshift_config"
+start dwm-background
+start copyq
+secrets_owner=$(dbus-send --session --print-reply --reply-timeout=1000 \
+	--dest=org.freedesktop.DBus /org/freedesktop/DBus \
+	org.freedesktop.DBus.NameHasOwner string:org.freedesktop.secrets 2>/dev/null || :)
+case "$secrets_owner" in
+*'boolean true'*) ;;
+*)
+	# complete the keyring started by pam before apps choose a password backend.
+	if command -v gnome-keyring-daemon >/dev/null 2>&1; then
+		timeout 5 gnome-keyring-daemon --start --components=secrets >/dev/null || :
+	fi
+	secrets_owner=$(dbus-send --session --print-reply --reply-timeout=1000 \
+		--dest=org.freedesktop.DBus /org/freedesktop/DBus \
+		org.freedesktop.DBus.NameHasOwner string:org.freedesktop.secrets 2>/dev/null || :)
+	case "$secrets_owner" in
+	*'boolean true'*) ;;
+	*) printf 'dwm: password keyring unavailable; nextcloud may ask to sign in again\n' >&2 ;;
+	esac
+	;;
+esac
+start nextcloud --background
+xset s 300 300 || :
+xset s reset || :
+if [ ! -x /usr/local/bin/dwm-slock ] || [ ! -u /usr/local/bin/dwm-slock ]; then
+	printf 'dwm: dwm-slock needs setup; run ./deploy.sh --lock to enable locking\n' >&2
+fi
+start xss-lock -- "$bindir/dwm-action" lock
+start dwm-status
+start dwm-mount
+status=0
+wait "$wm" || status=$?
+printf 'dwm exited: status %s\n' "$status"
+exit "$status"

@@ -1,0 +1,65 @@
+#!/bin/sh
+export LC_ALL=C
+
+icon=''
+level=5
+strength=
+color=5
+latency=
+vpn=0
+if devices=$(timeout 2 nmcli -t -f DEVICE,TYPE,STATE device status 2>/dev/null); then
+	device=$(printf '%s\n' "$devices" | awk -F: '$2 == "wifi" && $3 == "connected" { print $1; exit }')
+	if [ -n "$device" ]; then
+		icon=''
+		active=$(timeout 2 nmcli -t -f TYPE,UUID connection show --active 2>/dev/null |
+			awk -F: '$1 == "vpn" && $2 ~ /^[[:xdigit:]-]+$/ { print $2 }')
+		for uuid in $active; do
+			service=$(timeout 2 nmcli -g vpn.service-type connection show uuid "$uuid" 2>/dev/null)
+			if [ "$service" = org.freedesktop.NetworkManager.openvpn ]; then
+				icon=''
+				vpn=1
+				break
+			fi
+		done
+		strength=$(timeout 2 nmcli -t -f ACTIVE,SIGNAL device wifi list ifname "$device" --rescan no 2>/dev/null |
+			awk -F: '$1 == "yes" && $2 ~ /^[0-9]+$/ && $2 <= 100 { print $2; exit }')
+		if [ -z "$strength" ] && [ -r /proc/net/wireless ]; then
+			strength=$(awk -v device="$device:" '$1 == device && $3 ~ /^[0-9]+[.]?$/ {
+				value = int($3 * 100 / 70); if (value > 100) value = 100; print value; exit
+			}' /proc/net/wireless)
+		fi
+		if [ -n "$strength" ]; then
+			level=$((strength / 20 + 1))
+			[ "$level" -le 5 ] || level=5
+			if [ "$strength" -le 10 ]; then color=3
+			elif [ "$strength" -le 25 ]; then color=2
+			elif [ "$strength" -le 50 ]; then color=6
+			else color=4
+			fi
+		fi
+		gateway=$(timeout 2 nmcli --escape no -g IP4.GATEWAY,IP6.GATEWAY device show "$device" 2>/dev/null |
+			awk 'NF && $0 != "--" { print; exit }')
+		latency=n/a
+		if [ -n "$gateway" ]; then
+			elapsed=$(timeout 2 ping -n -c 1 -W 1 -I "$device" "$gateway" 2>/dev/null |
+				awk -F'time[=<]' '/time[=<]/ { split($2, value, " "); printf "%.0f", value[1]; exit }')
+			if [ -n "$elapsed" ]; then
+				latency=${elapsed}ms
+			fi
+		fi
+	fi
+fi
+if [ "${1:-}" = --color ]; then
+	# 7/8 mark the clickable region; 17-21 select the visible signal bars.
+	printf "\007\00${color}"
+	if [ -n "$strength" ] && [ "$vpn" -eq 0 ]; then
+		printf "\\$(printf '%03o' "$((16 + level))")"
+	fi
+	printf '%s\005' "$icon"
+	[ -z "$latency" ] || printf ' %s' "$latency"
+	printf '\010\001\n'
+else
+	printf '%s' "$icon"
+	[ -z "$latency" ] || printf ' %s' "$latency"
+	printf '\n'
+fi

@@ -1,0 +1,11 @@
+#!/bin/sh
+set -eu
+if [ -x /usr/local/bin/dwm-slock ] && [ -u /usr/local/bin/dwm-slock ]; then
+	exec /usr/local/bin/dwm-slock
+fi
+printf 'dwm: dwm-slock needs setup: run ./deploy.sh --lock; the screen is not locked\n' >&2
+if command -v dunstify >/dev/null 2>&1; then
+	timeout 2 dunstify -a dwm -u critical 'desktop action failed' \
+		'dwm-slock needs setup: run ./deploy.sh --lock; the screen is not locked' || :
+fi
+exit 1

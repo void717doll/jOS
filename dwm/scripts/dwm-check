@@ -1,0 +1,65 @@
+#!/bin/sh
+bindir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+PATH="$bindir:$HOME/.local/bin:$HOME/Nextcloud/bin:$PATH"
+export PATH
+missing=0
+check() {
+	if command -v "$1" >/dev/null 2>&1; then
+		printf 'ok: %s\n' "$1"
+	else
+		printf 'missing: %s (%s)\n' "$1" "$2"
+		missing=1
+	fi
+}
+for app in st firefox code dolphin keepassxc discord spotify col rec; do
+	check "$app" 'configured app shortcut'
+done
+for family in FontAwesome 'Material Icons'; do
+	if ! fc-list : family 2>/dev/null | grep -Fxq "$family"; then
+		printf 'missing: %s (ttf-all-the-icons; run ./deploy.sh --fonts)\n' "$family"
+		missing=1
+	fi
+done
+check python3 'clock calendar'
+check pactl 'audio keys'
+check dbus-send 'media keys'
+check dmenu 'screenshot chooser'
+check gio 'appimagelauncher entries in dmenu'
+check st-autocomplete 'terminal screen completion'
+check perl 'terminal screen completion helper'
+check xdg-open 'terminal url clicks'
+check flameshot 'screenshot capture'
+check xclip 'screenshot and emoji clipboard'
+if [ ! -r /usr/share/unicode/emoji/emoji-test.txt ]; then
+	printf 'missing: unicode-data (emoji picker)\n'
+	missing=1
+fi
+check copyq 'clipboard history'
+check nextcloud 'file sync at startup'
+check gnome-keyring-daemon 'saved nextcloud credentials; install gnome-keyring and libpam-gnome-keyring'
+if ! command -v brightnessctl >/dev/null 2>&1 && ! command -v xbacklight >/dev/null 2>&1; then
+	printf 'missing: brightnessctl or xbacklight (brightness keys)\n'
+	missing=1
+fi
+check xss-lock 'automatic locking'
+if [ ! -x /usr/local/bin/dwm-slock ] || [ ! -u /usr/local/bin/dwm-slock ]; then
+	printf 'missing: dwm-slock setup (run ./deploy.sh --lock)\n'
+	missing=1
+fi
+check dunst 'notifications'
+check dunstify 'volume and brightness popups'
+check xprop 'session startup and logout'
+check xsetroot 'desktop background and status'
+check xwallpaper 'wallpaper rendering'
+check tabbed 'window tab groups'
+check picom 'vsync compositing'
+check nmcli 'wifi status and saved network connections'
+check bluetoothctl 'bluetooth menu; install bluez'
+check redshift 'screen colour schedule: normal 7am-7pm, warm overnight'
+check nmtui 'advanced and hidden network connections'
+check lxpolkit 'authentication dialogs; install lxpolkit'
+check ping 'wifi gateway latency'
+check flock 'wifi cache locking'
+check udevadm 'battery and brightness change events'
+check dbus-update-activation-environment 'notification startup environment'
+exit "$missing"

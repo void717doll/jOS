@@ -1,0 +1,279 @@
+#!/bin/bash
+
+export LC_ALL=C
+bindir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+
+# fontawesome glyphs from ttf-all-the-icons.
+clock_icon=''
+light_icon=''
+
+level_color() {
+	case "$1" in ''|*[!0-9]*) printf 5; return ;; esac
+	if [ "$1" -le 10 ]; then printf 3
+	elif [ "$1" -le 25 ]; then printf 2
+	elif [ "$1" -le 50 ]; then printf 6
+	else printf 4
+	fi
+}
+
+audio() {
+	volume=$(timeout 2 pactl "get-$1-volume" "$2" 2>/dev/null |
+		awk '{ for (i = 1; i <= NF; i++) if ($i ~ /^[0-9]+%$/) { sub(/%$/, "", $i); print $i; exit } }')
+	mute=$(timeout 2 pactl "get-$1-mute" "$2" 2>/dev/null)
+	case "$mute" in
+	*yes) audio_text=muted ;;
+	*) audio_text=${volume:+$volume%}; audio_text=${audio_text:-n/a} ;;
+	esac
+	audio_icon=''
+	if [ "$audio_text" = muted ] || [ "$audio_text" = n/a ]; then
+		audio_icon=''
+	elif [ "$volume" -eq 0 ]; then
+		audio_icon=''
+	elif [ "$volume" -lt 50 ]; then
+		audio_icon=''
+	fi
+}
+
+brightness() {
+	light=$(timeout 2 brightnessctl -c backlight -m info 2>/dev/null |
+		awk -F, 'NR == 1 { sub(/%$/, "", $4); print $4 }')
+	if [ -z "$light" ] && command -v xbacklight >/dev/null 2>&1; then
+		light=$(timeout 2 xbacklight -get 2>/dev/null | awk 'NR == 1 { printf "%.0f", $1 }')
+	fi
+	light_text=${light:+$light%}
+	light_text=${light_text:-n/a}
+}
+
+battery() {
+	battery_text=
+	for device in /sys/class/power_supply/*; do
+		[ -r "$device/type" ] && [ "$(cat "$device/type")" = Battery ] || continue
+		[ ! -r "$device/present" ] || [ "$(cat "$device/present")" = 1 ] || continue
+		capacity=$(cat "$device/capacity" 2>/dev/null) || continue
+		case "$capacity" in ''|*[!0-9]*) continue ;; esac
+		battery_color=$(level_color "$capacity")
+		icon=''
+		if [ "$capacity" -ge 90 ]; then icon=''
+		elif [ "$capacity" -ge 65 ]; then icon=''
+		elif [ "$capacity" -ge 35 ]; then icon=''
+		elif [ "$capacity" -ge 10 ]; then icon=''
+		fi
+		if [ "$(cat "$device/status" 2>/dev/null)" = Charging ]; then
+			case "$(( $(date +%s) / 2 % 5 ))" in
+			0) icon='' ;;
+			1) icon='' ;;
+			2) icon='' ;;
+			3) icon='' ;;
+			4) icon='' ;;
+			esac
+		fi
+		if [ "${1:-}" = color ]; then
+			value=$(printf "\\001%s \\00${battery_color}%s%%\\001" "$icon" "$capacity")
+		else
+			value="$icon $capacity%"
+		fi
+		battery_text="${battery_text:+$battery_text   }$value"
+	done
+	battery_text=${battery_text:-''}
+}
+
+cached() (
+	name=$1
+	interval=$2
+	shift 2
+	directory=${XDG_RUNTIME_DIR:-${XDG_CACHE_HOME:-"$HOME/.cache"}}/dwm/status
+	mkdir -p "$directory" || { "$@"; exit; }
+	file=$directory/$name
+	exec 9>"$file.lock"
+	flock 9 || exit 1
+	now=$(date +%s)
+	sampled=0
+	[ ! -r "$file" ] || IFS= read -r sampled < "$file"
+	case "$sampled" in ''|*[!0-9]*) sampled=0 ;; esac
+	if [ "$sampled" -gt 0 ] && [ "$now" -ge "$sampled" ] && [ "$((now - sampled))" -lt "$interval" ]; then
+		tail -n +2 "$file"
+		exit
+	fi
+	temporary=$(mktemp "$file.XXXXXX") || exit 1
+	trap 'rm -f "$temporary"' EXIT
+	{ printf '%s\n' "$now"; "$@"; } > "$temporary" || exit 1
+	mv -f "$temporary" "$file"
+	tail -n +2 "$file"
+)
+
+status() {
+	audio sink @DEFAULT_SINK@
+	brightness
+	weather=$(cached weather-oceanside 300 "$bindir/dwm-weather")
+	if [ "${1:-}" = color ]; then
+		battery color
+		wifi=$(cached wifi-levels 10 "$bindir/dwm-wifi" --color)
+		bluetooth=$("$bindir/dwm-bluetooth" --color)
+		printf "%s   \\001%s %s\\001   \\001%s %s\\001   %s   %s   \\032%s\\033   \\026%s %s\\027\n" \
+			"$battery_text" "$audio_icon" "$audio_text" "$light_icon" "$light_text" "$wifi" "$bluetooth" "$weather" "$clock_icon" \
+			"$(date '+%m/%d/%Y %I:%M %p' | tr '[:upper:]' '[:lower:]')"
+	else
+		battery
+		wifi=$("$bindir/dwm-wifi")
+		bluetooth=$("$bindir/dwm-bluetooth" --status)
+		printf '%s   %s %s   %s %s   %s   %s   \032%s\033   %s %s\n' \
+			"$battery_text" "$audio_icon" "$audio_text" "$light_icon" "$light_text" "$wifi" "$bluetooth" "$weather" "$clock_icon" \
+			"$(date '+%m/%d/%Y %I:%M %p' | tr '[:upper:]' '[:lower:]')"
+	fi
+}
+
+battery_notice() {
+	timeout 2 dunstify -a dwm-battery -u "$1" -t "$2" -c "battery.$3" \
+		-h "string:x-dunst-stack-tag:dwm-battery-${device##*/}" "$4" "$capacity%"
+}
+
+power_notice() {
+	if [ "$1" = connected ]; then
+		timeout 2 dunstify -a dwm-power -u low -t 5000 -c power.connected \
+			-h string:x-dunst-stack-tag:dwm-power "charger connected" "laptop is charging"
+	else
+		timeout 2 dunstify -a dwm-power -u low -t 5000 -c power.disconnected \
+			-h string:x-dunst-stack-tag:dwm-power "charger unplugged" "running on battery"
+	fi
+}
+
+power_sound() {
+	if [ "$1" = connected ]; then
+		sound=/usr/share/sounds/freedesktop/stereo/power-plug.oga
+	else
+		sound=/usr/share/sounds/freedesktop/stereo/power-unplug.oga
+	fi
+	if [ -r "$sound" ] && command -v paplay >/dev/null 2>&1; then
+		paplay "$sound" >/dev/null 2>&1 &
+	fi
+}
+
+check_battery() (
+	command -v dunstify >/dev/null 2>&1 || return 0
+	state_dir=${XDG_STATE_HOME:-"$HOME/.local/state"}/dwm/battery
+	mkdir -p "$state_dir" || return 1
+	exec 9>"$state_dir/.lock"
+	flock -n 9 || return 0
+	ac_online=0
+	for device in /sys/class/power_supply/*; do
+		[ -r "$device/type" ] && [ "$(cat "$device/type")" = Mains ] || continue
+		[ -r "$device/online" ] && [ "$(cat "$device/online")" = 1 ] && ac_online=1
+	done
+	ac_state=$state_dir/power
+	if [ -r "$ac_state" ]; then
+		previous_ac=$(cat "$ac_state")
+		if [ "$ac_online" != "$previous_ac" ]; then
+			if [ "$ac_online" = 1 ]; then
+				power_notice connected || :
+				power_sound connected
+			else
+				power_notice disconnected || :
+				power_sound disconnected
+			fi
+			printf '%s\n' "$ac_online" > "$ac_state.tmp" && mv "$ac_state.tmp" "$ac_state"
+		fi
+	else
+		printf '%s\n' "$ac_online" > "$ac_state.tmp" && mv "$ac_state.tmp" "$ac_state"
+	fi
+	for device in /sys/class/power_supply/*; do
+		[ -r "$device/type" ] && [ "$(cat "$device/type")" = Battery ] || continue
+		[ ! -r "$device/present" ] || [ "$(cat "$device/present")" = 1 ] || continue
+		capacity=$(cat "$device/capacity" 2>/dev/null) || continue
+		case "$capacity" in ''|*[!0-9]*) continue ;; esac
+		state=$(cat "$device/status" 2>/dev/null) || continue
+		state_file=$state_dir/${device##*/}
+		flags=0
+		full_at=0
+		[ ! -r "$state_file" ] || read -r flags full_at < "$state_file"
+		case "$flags" in ''|*[!0-9]*) flags=0 ;; esac
+		previous_flags=$flags
+		previous_full_at=$full_at
+		case "$full_at" in ''|*[!0-9]*) full_at=$capacity ;; esac
+		# rearm above the thresholds with room for battery readings to fluctuate.
+		[ "$capacity" -lt 25 ] || flags=$((flags & ~1))
+		[ "$capacity" -lt 10 ] || flags=$((flags & ~2))
+		if [ "$state" != Full ] && [ "$capacity" -le "$((full_at - 5))" ]; then
+			flags=$((flags & ~4))
+		fi
+		if [ "$state" = Discharging ] && [ "$capacity" -le 5 ]; then
+			if [ "$((flags & 2))" = 0 ] && battery_notice critical 0 critical 'battery critically low'; then
+				flags=$((flags | 3))
+			fi
+		elif [ "$state" = Discharging ] && [ "$capacity" -le 20 ]; then
+			if [ "$((flags & 1))" = 0 ] && battery_notice normal 8000 low 'battery low'; then
+				flags=$((flags | 1))
+			fi
+		elif [ "$state" = Full ] || { [ "$capacity" -ge 100 ] && [ "$state" != Discharging ]; }; then
+			if [ "$((flags & 4))" = 0 ] && battery_notice normal 6000 full 'battery fully charged'; then
+				flags=$((flags | 4))
+				full_at=$capacity
+			fi
+		fi
+		if [ "$flags" != "$previous_flags" ] || [ "$full_at" != "$previous_full_at" ]; then
+			printf '%s %s\n' "$flags" "$full_at" > "$state_file.tmp" && mv "$state_file.tmp" "$state_file"
+		fi
+	done
+)
+
+notify() {
+	case "$1" in
+	volume) audio sink @DEFAULT_SINK@; label=volume; value=$volume; text=$audio_text ;;
+	microphone) audio source @DEFAULT_SOURCE@; label=microphone; value=$volume; text=$audio_text ;;
+	brightness) brightness; label=brightness; value=$light; text=$light_text ;;
+	*) return 1 ;;
+	esac
+	[ "$text" != muted ] || value=0
+	category=control.$label
+	[ "$text" != muted ] || category=control.muted
+	case "$value" in ''|*[!0-9]*) return 0 ;; esac
+	[ "$value" -le 100 ] || value=100
+	if command -v dunstify >/dev/null 2>&1; then
+		timeout 2 dunstify -a dwm -u low -t 1500 -c "$category" \
+			-h "string:x-dunst-stack-tag:dwm-$label" -h "int:value:$value" "$label: $text"
+	fi
+}
+
+case "${1:-}" in
+--once) status ;;
+--check-battery) check_battery ;;
+--refresh) xsetroot -name "$(status color)" ;;
+--notify)
+	notify "${2:-}"
+	xsetroot -name "$(status color)"
+	;;
+'')
+	events=$(mktemp -d) || exit 1
+	monitor=
+	cleanup() {
+		if [ -n "$monitor" ]; then
+			kill "$monitor" 2>/dev/null || :
+			wait "$monitor" 2>/dev/null || :
+		fi
+		exec 3>&-
+		rm -f "$events/device"
+		rmdir "$events"
+	}
+	trap cleanup EXIT
+	trap 'exit 0' HUP INT TERM
+	mkfifo "$events/device" || exit 1
+	exec 3<>"$events/device"
+	if command -v udevadm >/dev/null 2>&1; then
+		udevadm monitor --udev --subsystem-match=power_supply --subsystem-match=backlight >&3 2>/dev/null &
+		monitor=$!
+	fi
+	previous=
+	while :; do
+		check_battery
+		current=$(status color)
+		if [ "$current" != "$previous" ]; then
+			xsetroot -name "$current" || exit 1
+			previous=$current
+		fi
+		# device events wake the bar; polling covers drivers that emit no events.
+		if IFS= read -r -t 2 -u 3 event; then
+			while IFS= read -r -t 0.05 -u 3 event; do :; done
+		fi
+	done
+	;;
+*) printf 'usage: dwm-status [--once|--refresh|--check-battery|--notify volume|microphone|brightness]\n' >&2; exit 1 ;;
+esac

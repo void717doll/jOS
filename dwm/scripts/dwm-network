@@ -1,0 +1,97 @@
+#!/bin/bash
+set -eu
+export LC_ALL=C
+bindir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+
+notify() {
+	if command -v dunstify >/dev/null 2>&1; then
+		timeout 2 dunstify -a dwm 'wifi' "$*" || :
+	fi
+}
+
+fail() {
+	printf 'dwm: %s\n' "$*" >&2
+	notify "$*"
+	exit 1
+}
+
+terminal() {
+	for program in st stterm xterm; do
+		if command -v "$program" >/dev/null 2>&1; then
+			exec "$program" -e "$@"
+		fi
+	done
+	fail 'wifi password prompts need st or xterm'
+}
+
+command -v nmcli >/dev/null 2>&1 || fail 'wifi needs networkmanager'
+if [ "${1:-}" = --connect ] && [ "$#" -eq 3 ]; then
+	device=$2
+	ssid=$3
+	profiles=$(timeout 5 nmcli -t -f UUID,TYPE connection show) || fail 'could not read saved networks'
+	profile=
+	while IFS=: read -r uuid type; do
+		[ "$type" = 802-11-wireless ] || continue
+		name=$(timeout 5 nmcli --escape no -g 802-11-wireless.ssid connection show uuid "$uuid") || continue
+		[ "$name" = "$ssid" ] || continue
+		profile=$uuid
+		break
+	done <<< "$profiles"
+	if [ -n "$profile" ]; then
+		security=$(timeout 5 nmcli -g 802-11-wireless-security.key-mgmt connection show uuid "$profile") || fail 'could not read wifi security'
+		case "$security" in
+		wpa-psk|sae)
+			# networkmanager stores the password itself, without a desktop secret agent.
+			nmcli connection modify uuid "$profile" 802-11-wireless-security.psk-flags 0 || fail 'could not enable saved wifi passwords'
+			;;
+		esac
+		nmcli --ask --wait 60 connection up uuid "$profile" ifname "$device" || fail 'could not connect wifi'
+	else
+		nmcli --ask --wait 60 device wifi connect "$ssid" ifname "$device" || fail 'could not connect wifi'
+	fi
+	active=$(timeout 5 nmcli -t -f UUID,DEVICE connection show --active) || fail 'could not read connected network'
+	profile=$(printf '%s\n' "$active" | awk -F: -v device="$device" '$2 == device { print $1; exit }')
+	[ -n "$profile" ] || fail 'could not find connected wifi profile'
+	# equal top priorities prefer the most recently connected network.
+	nmcli connection modify uuid "$profile" connection.autoconnect yes connection.autoconnect-priority 999 || fail 'connected, but could not save reconnect preference'
+	notify 'connected; saved as preferred wifi'
+	exit 0
+fi
+[ "$#" -eq 0 ] || exit 1
+command -v dmenu >/dev/null 2>&1 || fail 'wifi menu needs dmenu'
+radio=$(timeout 5 nmcli radio wifi) || fail 'could not read wifi radio'
+labels=()
+ssids=()
+if [ "$radio" = enabled ]; then
+	devices=$(timeout 5 nmcli -t -f DEVICE,TYPE,STATE device status) || fail 'could not read wifi devices'
+	device=$(printf '%s\n' "$devices" | awk -F: '$2 == "wifi" && $3 == "connected" { print $1; exit }')
+	if [ -z "$device" ]; then
+		device=$(printf '%s\n' "$devices" | awk -F: '$2 == "wifi" { print $1; exit }')
+	fi
+	if [ -n "$device" ]; then
+		networks=$(timeout 15 nmcli --escape no -g SSID device wifi list ifname "$device" --rescan auto) || fail 'could not scan wifi networks'
+		declare -A seen=()
+		while IFS= read -r ssid; do
+			[ -n "$ssid" ] && [ "$ssid" != -- ] || continue
+			[ -z "${seen[$ssid]:-}" ] || continue
+			seen["$ssid"]=yes
+			name=$(printf '%s' "$ssid" | tr '\r\t' '  ')
+			labels+=("$((${#labels[@]} + 1)). connect: $name")
+			ssids+=("$ssid")
+		done <<< "$networks"
+	fi
+	radio_action='disable wifi'
+else
+	radio_action='enable wifi'
+fi
+choice=$(printf '%s\n' "${labels[@]}" 'saved networks / hidden / advanced' 'vpn' "$radio_action" | dmenu -i -l 12 -p 'wifi') || exit 0
+for i in "${!labels[@]}"; do
+	[ "$choice" = "${labels[i]}" ] || continue
+	terminal "$0" --connect "$device" "${ssids[i]}"
+done
+case "$choice" in
+'saved networks / hidden / advanced') terminal nmtui ;;
+vpn) exec "$bindir/dwm-vpn" ;;
+'enable wifi') nmcli radio wifi on || fail 'could not enable wifi'; exec "$0" ;;
+'disable wifi') nmcli radio wifi off || fail 'could not disable wifi' ;;
+esac

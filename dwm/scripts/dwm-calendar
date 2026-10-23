@@ -1,0 +1,84 @@
+#!/usr/bin/env python3
+import calendar
+from datetime import date, timedelta
+import os
+from pathlib import Path
+import sys
+
+if '--show' not in sys.argv[1:]:
+    os.execlp('st', 'st', '-c', 'dwm-calendar', '-t', 'calendar', '-g', '80x30',
+              '-e', str(Path(__file__).resolve()), '--show')
+
+def nth_weekday(year, month, weekday, occurrence):
+    first = date(year, month, 1)
+    return first + timedelta(days=(weekday - first.weekday()) % 7 + 7 * (occurrence - 1))
+
+
+def last_weekday(year, month, weekday):
+    last = date(year, month, calendar.monthrange(year, month)[1])
+    return last - timedelta(days=(last.weekday() - weekday) % 7)
+
+
+def federal_holidays(year):
+    dates = [
+        (date(year, 1, 1), "new year's day"),
+        (nth_weekday(year, 1, calendar.MONDAY, 3), 'martin luther king jr. day'),
+        (nth_weekday(year, 2, calendar.MONDAY, 3), "washington's birthday"),
+        (last_weekday(year, 5, calendar.MONDAY), 'memorial day'),
+        (date(year, 6, 19), 'juneteenth'),
+        (date(year, 7, 4), 'independence day'),
+        (nth_weekday(year, 9, calendar.MONDAY, 1), 'labor day'),
+        (nth_weekday(year, 10, calendar.MONDAY, 2), 'columbus day'),
+        (date(year, 11, 11), 'veterans day'),
+        (nth_weekday(year, 11, calendar.THURSDAY, 4), 'thanksgiving'),
+        (date(year, 12, 25), 'christmas day'),
+    ]
+    observed = []
+    for holiday, name in dates:
+        observed.append((holiday, name, False))
+        if holiday.weekday() == calendar.SATURDAY:
+            observed.append((holiday - timedelta(days=1), name, True))
+        elif holiday.weekday() == calendar.SUNDAY:
+            observed.append((holiday + timedelta(days=1), name, True))
+    return observed
+
+
+today = date.today()
+calendar.setfirstweekday(calendar.SUNDAY)
+holidays = [item for year in (today.year - 1, today.year, today.year + 1)
+            for item in federal_holidays(year)
+            if item[0].year == today.year and item[0].month == today.month]
+holiday_labels = {
+    "new year's day": 'new year',
+    'martin luther king jr. day': 'mlk day',
+    "washington's birthday": 'wash. bday',
+    'memorial day': 'memorial',
+    'juneteenth': 'juneteenth',
+    'independence day': 'july 4',
+    'labor day': 'labor day',
+    'columbus day': 'columbus',
+    'veterans day': 'veterans',
+    'thanksgiving': 'thanks',
+    'christmas day': 'christmas',
+}
+events = {holiday.day: holiday_labels[name] for holiday, name, _ in holidays}
+width = 76
+print(f'{today:%B %Y}'.center(width).lower())
+print(' '.join(day.center(10) for day in ('su', 'mo', 'tu', 'we', 'th', 'fr', 'sa')))
+for week in calendar.monthcalendar(today.year, today.month):
+    dates = []
+    labels = []
+    for day in week:
+        if day == today.day:
+            dates.append('    \033[7m' + f'{day:2}' + '\033[0m    ')
+        else:
+            dates.append(f'{day:2}'.center(10) if day else ' ' * 10)
+        labels.append(events.get(day, '').center(10))
+    print(' '.join(dates))
+    print(' '.join(labels))
+print('\n* us federal holidays')
+for holiday, name, observed in holidays:
+    suffix = ' (observed)' if observed else ''
+    print(f'{holiday:%b} {holiday.day:2}  {name}{suffix}'.lower())
+print('\nenter to close', end='', flush=True)
+sys.stdin.readline()

@@ -1,0 +1,39 @@
+#!/bin/sh
+set -eu
+
+entries=$(mktemp)
+trap 'rm -f "$entries"' EXIT
+
+# appimagelauncher integrates apps here instead of adding commands to PATH.
+directory=${XDG_DATA_HOME:-"$HOME/.local/share"}/applications
+for desktop in "$directory"/appimagekit_*.desktop; do
+	[ -f "$desktop" ] || continue
+	name=$(awk '
+		/^\[Desktop Entry\]$/ { entry = 1; next }
+		/^\[/ { entry = 0 }
+		entry && /^Name=/ { name = substr($0, 6) }
+		entry && /^(Hidden|NoDisplay)=true$/ { hidden = 1 }
+		END { if (!hidden) print name }
+	' "$desktop")
+	[ -n "$name" ] || continue
+	tryexec=$(awk '
+		/^\[Desktop Entry\]$/ { entry = 1; next }
+		/^\[/ { entry = 0 }
+		entry && /^TryExec=/ { print substr($0, 9); exit }
+	' "$desktop")
+	if [ -n "$tryexec" ]; then
+		command -v "$tryexec" >/dev/null 2>&1 || continue
+	fi
+	printf '%s [appimage]\t%s\n' "$name" "$desktop" >> "$entries"
+done
+
+choice=$({ dmenu_path; cut -f1 "$entries"; } | sort -u | dmenu "$@") || exit 0
+[ -n "$choice" ] || exit 0
+while IFS="$(printf '\t')" read -r name desktop; do
+	if [ "$choice" = "$name" ]; then
+		# gio handles quoted paths, field codes and app-specific arguments.
+		gio launch "$desktop"
+		exit $?
+	fi
+done < "$entries"
+"${SHELL:-/bin/sh}" -c "$choice"

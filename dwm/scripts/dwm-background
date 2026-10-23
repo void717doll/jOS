@@ -1,0 +1,22 @@
+#!/bin/sh
+set -eu
+
+xsetroot -solid '#222222' -cursor_name left_ptr
+wallpaper=${DWM_WALLPAPER:-}
+config=${XDG_CONFIG_HOME:-"$HOME/.config"}/dwm/wallpaper
+bindir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+if [ ! -r "$config" ]; then
+	config=$bindir/../share/dwm/wallpaper
+	[ ! -r "$bindir/wallpaper" ] || config=$bindir/wallpaper
+fi
+if [ -z "$wallpaper" ] && [ -r "$config" ]; then
+	IFS= read -r wallpaper < "$config" || :
+fi
+wallpaper=${wallpaper#file://}
+case "$wallpaper" in '~/'*) wallpaper=$HOME/${wallpaper#\~/} ;; esac
+[ -n "$wallpaper" ] && [ -f "$wallpaper" ] || exit 0
+if ! command -v xwallpaper >/dev/null 2>&1; then
+	printf 'dwm: wallpaper needs xwallpaper; using a solid background\n' >&2
+	exit 0
+fi
+exec xwallpaper --zoom "$wallpaper"
