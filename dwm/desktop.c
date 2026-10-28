@@ -28,7 +28,7 @@ createtitlebar(Client *c)
 	int tabbed = 0;
 	XSetWindowAttributes attributes = {
 		.override_redirect = True,
-		.event_mask = ExposureMask|ButtonPressMask|EnterWindowMask,
+		.event_mask = ExposureMask|ButtonPressMask|EnterWindowMask|PointerMotionMask,
 		.background_pixel = titlescheme[0][ColBg].pixel
 	};
 
@@ -536,7 +536,7 @@ void
 updatehandles(Client *c)
 {
 	XSetWindowAttributes attributes = {.override_redirect = True,
-		.event_mask = ButtonPressMask|EnterWindowMask};
+		.event_mask = ButtonPressMask|EnterWindowMask|PointerMotionMask};
 	XWindowChanges stack = {.sibling = c->win, .stack_mode = Above};
 	unsigned int i;
 	int floating, edges, border, b, grip, outside;

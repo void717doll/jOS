@@ -971,7 +971,7 @@ main(void)
 				int replayed = replayedclicks;
 				buttonpress(&click);
 				assert(replayedclicks == replayed + 1);
-				assert(raisedwindow == (floating || !layouts[layout].arrange ? c.win : None));
+				assert(raisedwindow == c.win);
 			}
 		}
 		m.lt[0] = &layouts[1];

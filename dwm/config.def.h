@@ -11,6 +11,7 @@ static const unsigned int systrayspacing = 2;
 static const int systraypinningfailfirst = 1;
 static const int showsystray = 1;
 static const unsigned int snap      = 32;       /* snap pixel */
+static const unsigned int hotcornersize = 4;    /* top-left corner opens the all-window switcher */
 static const int showbar            = 1;        /* 0 means no bar */
 static const int topbar             = 0;        /* 0 means bottom bar */
 static const char *fonts[]          = { "monospace:size=14", "FontAwesome:size=14", "Material Icons:size=14" };

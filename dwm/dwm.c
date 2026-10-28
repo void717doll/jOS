@@ -318,6 +318,7 @@ static Systray *systray;
 static unsigned int iflycol = 0;
 static Window *tablist, tabwin;
 static int tabcount, tabindex, tabmode;
+static int hotcorneractive;
 static const char broken[] = "broken";
 static char stext[256];
 static int wifistart = -1, wifiend = -1;
@@ -1447,7 +1448,7 @@ manage(Window w, XWindowAttributes *wa)
 	updatewindowtype(c);
 	updatesizehints(c);
 	updatewmhints(c);
-	XSelectInput(dpy, w, EnterWindowMask|FocusChangeMask|PropertyChangeMask|StructureNotifyMask);
+	XSelectInput(dpy, w, EnterWindowMask|FocusChangeMask|PropertyChangeMask|StructureNotifyMask|PointerMotionMask);
 	grabbuttons(c);
 	if (!c->isfloating)
 		c->isfloating = c->oldstate = trans != None || c->isfixed;
@@ -1527,10 +1528,21 @@ motionnotify(XEvent *e)
 	static Monitor *mon = NULL;
 	Monitor *m;
 	XMotionEvent *ev = &e->xmotion;
+	int inhotcorner;
 
-	if (tabwin || ev->window != root)
+	m = recttomon(ev->x_root, ev->y_root, 1, 1);
+	inhotcorner = m && ev->x_root >= m->mx && ev->x_root < m->mx + (int)hotcornersize
+	           && ev->y_root >= m->my && ev->y_root < m->my + (int)hotcornersize;
+	if (!inhotcorner)
+		hotcorneractive = 0;
+	else if (!hotcorneractive) {
+		hotcorneractive = 1;
+		if (!tabwin && !(ev->state & (Button1Mask|Button2Mask|Button3Mask)))
+			alttab(&(Arg){.i = 4});
+	}
+	if (tabwin)
 		return;
-	if ((m = recttomon(ev->x_root, ev->y_root, 1, 1)) != mon && mon) {
+	if (m != mon && mon) {
 		unfocus(selmon->sel, 1);
 		selmon = m;
 		focus(NULL);
@@ -1877,6 +1889,11 @@ restack(Monitor *m)
 				XConfigureWindow(dpy, c->win, CWSibling|CWStackMode, &wc);
 				wc.sibling = c->win;
 			}
+		if (!m->sel->isfloating) {
+			if (m->sel->titlebar)
+				XRaiseWindow(dpy, m->sel->titlebar);
+			XRaiseWindow(dpy, m->sel->win);
+		}
 	}
 	for (c = m->clients; c; c = c->next)
 		updatehandles(c);
