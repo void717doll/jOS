@@ -622,6 +622,7 @@ static void
 buttonpress(XButtonEvent *ev)
 {
 	struct item *item;
+	int x, right, width;
 
 	if (ev->button == Button4 || ev->button == Button5) {
 		if (ev->button == Button4 && sel && sel->left) {
@@ -637,6 +638,28 @@ buttonpress(XButtonEvent *ev)
 		}
 		drawmenu();
 		return;
+	}
+	if (ev->button == Button1 && lines == 0 && curr) {
+		right = mw - MIN((int)TEXTW(numbers), mw);
+		x = promptw + inputw;
+		if (curr->left && ev->x >= x && ev->x < x + (int)TEXTW("<")) {
+			if (prev)
+				curr = sel = prev;
+			calcoffsets();
+			drawmenu();
+			return;
+		}
+		x += TEXTW("<");
+		for (item = curr; item && item != next; item = item->right) {
+			width = textw_clamp(item->text, MAX(0, right - x - (int)TEXTW(">")));
+			x += width;
+		}
+		if (next && ev->x >= x && ev->x < x + (int)TEXTW(">")) {
+			curr = sel = next;
+			calcoffsets();
+			drawmenu();
+			return;
+		}
 	}
 	if (ev->button != Button1 || !(item = itemat(ev->x, ev->y)))
 		return;

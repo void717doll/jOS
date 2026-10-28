@@ -1,0 +1,22 @@
+name: build
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential libfontconfig1-dev libfreetype-dev \
+            libx11-dev libxft-dev libxinerama-dev libxext-dev libxtst-dev xvfb python3
+      - name: build and run unit checks
+        run: make -C dwm check
+      - name: check dmenu launch scripts
+        run: make -C dmenu check
+      - name: run x11 checks
+        run: make -C dwm check-x11

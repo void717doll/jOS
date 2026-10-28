@@ -67,10 +67,11 @@ with tempfile.TemporaryDirectory(prefix='dwm-x11-') as directory:
     binpath.mkdir()
     launches = temporary / 'launches'
     launcher = binpath / 'dmenu_run'
-    launcher.write_text('#!/bin/sh\nprintf "launch\\n" >> "$LAUNCH_LOG"\nprintf "st\\nfirefox\\n" | dmenu "$@"\n')
+    launcher.write_text('#!/bin/sh\nprintf "launch\\n" >> "$LAUNCH_LOG"\nchoice=$(printf "st\\nfirefox\\n" | dmenu "$@")\n[ -z "$choice" ] || printf "%s\\n" "$choice" >> "$CHOICE_LOG"\n')
     launcher.chmod(0o755)
     env = dict(os.environ, PATH=f'{binpath}:{project}:{project.parent / "dmenu"}:{project.parent / "tabbed"}:/usr/bin:/bin',
-               LAUNCH_LOG=str(launches), XDG_STATE_HOME=str(temporary / 'state'))
+               LAUNCH_LOG=str(launches), CHOICE_LOG=str(temporary / 'choices'),
+               XDG_STATE_HOME=str(temporary / 'state'))
     wm = server = None
     display = None
     readfd, writefd = os.pipe()
@@ -110,6 +111,18 @@ with tempfile.TemporaryDirectory(prefix='dwm-x11-') as directory:
                 x.XQueryTree(display, root, C.byref(returned_root), C.byref(parent), C.byref(children), C.byref(count))
                 try:
                     return any(b'dmenu' in prop(children[i], 'WM_CLASS') for i in range(count.value))
+                finally:
+                    if children:
+                        x.XFree(children)
+
+            def menu_window():
+                parent, returned_root, children, count = W(), W(), P(W)(), U()
+                x.XQueryTree(display, root, C.byref(returned_root), C.byref(parent), C.byref(children), C.byref(count))
+                try:
+                    for index in range(count.value):
+                        if b'dmenu' in prop(children[index], 'WM_CLASS'):
+                            return children[index]
+                    return None
                 finally:
                     if children:
                         x.XFree(children)
@@ -180,6 +193,11 @@ with tempfile.TemporaryDirectory(prefix='dwm-x11-') as directory:
                 test.XTestFakeButtonEvent(display, 1, False, 0)
                 x.XFlush(display)
 
+            def superdrag(left, top, dx, dy):
+                key(0xffeb, True)
+                drag(left, top, dx, dy)
+                key(0xffeb, False)
+
             def window(name):
                 win = x.XCreateSimpleWindow(display, root, 10, 10, 240, 160, 0, 0, 0)
                 x.XStoreName(display, win, name.encode())
@@ -236,6 +254,32 @@ with tempfile.TemporaryDirectory(prefix='dwm-x11-') as directory:
             wait_for(menu_visible, 'meta did not reopen dmenu')
             chord(0xff1b)
             wait_for(lambda: not menu_visible(), 'escape did not close dmenu')
+            chord(0xffeb)
+            wait_for(menu_visible, 'meta did not reopen dmenu for mouse input')
+            menu = menu_window()
+            left, top, width, height, _ = geometry(menu)
+            assert height >= 50, 'dmenu did not show its vertical results'
+            test.XTestFakeMotionEvent(display, 0, left + width // 2, top + 2 * (height // 3) + 2, 0)
+            x.XFlush(display)
+            time.sleep(0.05)
+            chord(0xff0d)
+            wait_for(lambda: not menu_visible(), 'pressing enter after hovering did not choose a dmenu result')
+            wait_for(lambda: Path(env['CHOICE_LOG']).exists(), 'hover selection did not return a dmenu item')
+            assert Path(env['CHOICE_LOG']).read_text().splitlines() == ['firefox'], 'hover selected the wrong dmenu item'
+            chord(0xffeb)
+            wait_for(menu_visible, 'meta did not reopen dmenu for click input')
+            menu = menu_window()
+            left, top, width, height, _ = geometry(menu)
+            test.XTestFakeMotionEvent(display, 0, left + width // 2, top + height // 3 + 2, 0)
+            x.XFlush(display)
+            time.sleep(0.05)
+            test.XTestFakeButtonEvent(display, 1, True, 0)
+            test.XTestFakeButtonEvent(display, 1, False, 0)
+            x.XFlush(display)
+            wait_for(lambda: not menu_visible(), 'clicking a dmenu result did not close the menu')
+            wait_for(lambda: len(Path(env['CHOICE_LOG']).read_text().splitlines()) == 2,
+                     'mouse selection did not return a dmenu item')
+            assert Path(env['CHOICE_LOG']).read_text().splitlines() == ['firefox', 'st'], 'mouse click selected the wrong dmenu item'
             for _ in range(3):
                 chord(0xffe9, 0xff09)
                 assert x.XGrabKeyboard(display, root, 0, 1, 1, 0) == 0, 'alt-tab left the keyboard grabbed'
@@ -264,6 +308,12 @@ with tempfile.TemporaryDirectory(prefix='dwm-x11-') as directory:
                      'windows were not attached to the tab group')
             wait_for(lambda: tabs_fit(group, second, third), 'initial tabs do not fill the group')
             assert prop(group, '_NET_FRAME_EXTENTS') == [1, 1, 1, 1], 'tabbed has a duplicate title strip'
+            chord(0xffeb, 0xffe1, ord('f'))
+            left, top, width, height, _ = geometry(group)
+            superdrag(left + width // 2, top + 10, 20, 15)
+            wait_for(lambda: geometry(group)[:2] == (left + 20, top + 15),
+                     'super-drag did not move the floating tab group')
+            chord(0xffeb, 0xffe1, ord('t'))
             wait_for(lambda: focused_window() in (second, third), 'no tab has keyboard focus')
             selected_tab = focused_window()
             other_tab = third if selected_tab == second else second

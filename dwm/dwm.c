@@ -997,7 +997,7 @@ drawbar(Monitor *m)
 	}
 
 	for (c = m->clients; c; c = c->next) {
-		if (ISTAGVISIBLE(c))
+		if (ISTAGVISIBLE(c) && !istabgroup(c))
 			n++;
 		occ |= c->tags;
 		if (c->isurgent)
@@ -1025,7 +1025,7 @@ drawbar(Monitor *m)
 
 			i = 0;
 			for (c = m->clients; c; c = c->next) {
-				if (!ISTAGVISIBLE(c) || c == m->sel)
+				if (!ISTAGVISIBLE(c) || istabgroup(c) || c == m->sel)
 					continue;
 				tw = TEXTW(c->name);
 				if (tw < mw)
@@ -1037,7 +1037,7 @@ drawbar(Monitor *m)
 				mw += ew / i;
 
 			for (c = m->clients; c; c = c->next) {
-				if (!ISTAGVISIBLE(c))
+				if (!ISTAGVISIBLE(c) || istabgroup(c))
 					continue;
 				tw = MAX(0, MIN(w, MIN(m->sel == c ? w : mw, (int)TEXTW(c->name))));
 				c->titlex = x;

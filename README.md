@@ -59,7 +59,19 @@ settings live in the source configs. user settings and session state go under
 
 grouped windows use tabbed controls: `ctrl` + `tab` switches tabs,
 `ctrl` + `shift` + `tab` switches backwards, and `ctrl` + `shift` + `w`
-closes the selected tab.
+closes the selected tab. in floating mode, hold `super` and drag a tabbed window
+to move the group.
+
+dmenu results can be selected by hovering and clicking. the dwm bar leaves
+window titles to tabbed for grouped windows, so the active tab title is not
+shown twice. closing the last tab shuts down its container cleanly.
+
+## checks
+
+github actions builds the tools and runs their test suites on every push and
+pull request. run the same checks locally with `make -C dwm check`,
+`make -C dmenu check`, and `make -C dwm check-x11` (the latter needs `xvfb`
+and `libxtst`).
 
 ## credits
 
