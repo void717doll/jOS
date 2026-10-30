@@ -4,6 +4,8 @@ a small x11 desktop bundle. cherry is the nickname for dwm's `[]=` tiling
 mode; berry is the nickname for its `><>` floating mode. it includes five
 workspaces, a launcher, terminal, grouped windows, and a screen locker. wifi,
 bluetooth, weather, and the calendar are on the bar. screenshots open flameshot.
+dunst handles notifications, and redshift warms the display overnight. their
+configs are bundled in `dwm/dunstrc` and `dwm/redshift.conf`.
 
 ## install
 
