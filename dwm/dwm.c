@@ -715,7 +715,7 @@ clientmessage(XEvent *e)
 			setfullscreen(c, (cme->data.l[0] == 1 /* _NET_WM_STATE_ADD    */
 					  || (cme->data.l[0] == 2 /* _NET_WM_STATE_TOGGLE */ && !c->isfullscreen)));
 	} else if (cme->message_type == netatom[NetActiveWindow]) {
-		if (cme->data.l[0] == 2) {
+		if (cme->data.l[0] == 0 || cme->data.l[0] == 2) {
 			c->ishidden = 0;
 			c->mon->showdesktop = 0;
 			unfocus(selmon->sel, 0);
