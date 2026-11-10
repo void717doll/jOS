@@ -52,7 +52,7 @@ settings live in the source configs. user settings and session state go under
 | `super` + `ctrl` + `space` | toggle floating for the focused window |
 | `super` + arrow keys | snap the focused window to an edge |
 | `alt` + `tab` / `shift` + `alt` + `tab` | switch visible windows |
-| `super` + `w` / top-left screen corner | show windows from every workspace |
+| `super` + `w` / top-left screen corner | open the clickable dmenu window list |
 | `super` + `1`–`5` | switch workspace |
 | `super` + `shift` + `1`–`5` | move window to workspace |
 | `super` + `n` / `super` + `shift` + `n` | wifi / bluetooth menu |

@@ -55,7 +55,7 @@ if [ "$dependencies" = true ]; then
 			libfontconfig1-dev libxrender-dev bash util-linux udev udisks2 libglib2.0-bin dbus-x11 dunst picom redshift xwallpaper \
 			x11-utils x11-xserver-utils xinput xinit xserver-xorg-core fonts-dejavu-core fontconfig \
 			network-manager bluez lxpolkit iputils-ping \
-			pulseaudio-utils sound-theme-freedesktop brightnessctl copyq xss-lock flameshot xclip curl unicode-data \
+			pulseaudio-utils sound-theme-freedesktop brightnessctl copyq xss-lock flameshot xclip wmctrl curl unicode-data \
 			dolphin gimp nextcloud-desktop gnome-keyring libpam-gnome-keyring
 		;;
 	*arch*)
@@ -63,7 +63,7 @@ if [ "$dependencies" = true ]; then
 			libxrender libxcrypt fontconfig freetype2 perl python xdg-utils bash util-linux systemd udisks2 glib2 dbus \
 			dunst picom redshift xwallpaper xorg-xrandr xorg-xsetroot xorg-xset xorg-xinput xorg-xinit xorg-server \
 			ttf-dejavu networkmanager bluez lxsession iputils libpulse sound-theme-freedesktop brightnessctl copyq xss-lock flameshot \
-			xclip curl unicode-character-database dolphin gimp nextcloud-client gnome-keyring
+			xclip wmctrl curl unicode-character-database dolphin gimp nextcloud-client gnome-keyring
 		;;
 	*) printf 'jOS: --deps supports debian, ubuntu, and arch\n' >&2; exit 1 ;;
 	esac

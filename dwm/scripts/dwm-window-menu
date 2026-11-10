@@ -1,0 +1,28 @@
+#!/bin/sh
+set -eu
+
+monitor=${1:-0}
+windows=$(wmctrl -l -x | awk '
+NF >= 4 {
+	id = $1
+	desktop = $2
+	class = $4
+	title = $0
+	sub(/^[^[:space:]]+[[:space:]]+[^[:space:]]+[[:space:]]+[^[:space:]]+[[:space:]]+[^[:space:]]+[[:space:]]*/, "", title)
+	if (desktop == -1)
+		desktop = "*"
+	else
+		desktop++
+	if (title == "")
+		title = class
+	printf "%s  [%s] %s\n", id, desktop, title
+}')
+
+[ -n "$windows" ] || exit 0
+selection=$(printf '%s\n' "$windows" | dmenu -m "$monitor" -i -l 12 -p window) || exit 0
+id=${selection%% *}
+
+case "$id" in
+0x[0-9a-fA-F]*) exec wmctrl -ia "$id" ;;
+*) exit 1 ;;
+esac

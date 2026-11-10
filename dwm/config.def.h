@@ -108,6 +108,7 @@ static const char *dmenucmd[] = {
 	"-hp", "st,firefox,code,dolphin,keepassxc,discord,spotify",
 	NULL
 };
+static const char *windowmenucmd[] = { "dwm-window-menu", dmenumon, NULL };
 static const char *termcmd[]  = { "st", NULL };
 
 static const Key keys[] = {

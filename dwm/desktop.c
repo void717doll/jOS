@@ -258,6 +258,10 @@ alttab(const Arg *arg)
 
 	if (tabwin)
 		return;
+	if (arg->i == 4) {
+		spawn(&(Arg){.v = windowmenucmd});
+		return;
+	}
 	tabmode = abs(arg->i);
 	if (tabmode == 2 && selmon->sel)
 		XGetClassHint(dpy, selmon->sel->win, &selected);
