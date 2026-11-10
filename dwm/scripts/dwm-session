@@ -192,6 +192,7 @@ esac
 start nextcloud --background
 xset s 300 300 || :
 xset s reset || :
+start dwm-media-inhibit
 if [ ! -x /usr/local/bin/dwm-slock ] || [ ! -u /usr/local/bin/dwm-slock ]; then
 	printf 'dwm: dwm-slock needs setup; run ./deploy.sh --lock to enable locking\n' >&2
 fi

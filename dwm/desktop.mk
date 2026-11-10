@@ -14,7 +14,7 @@ install: all
 	$(MAKE) -C ../dmenu install PREFIX="$(PREFIX)" DESTDIR="$(DESTDIR)"
 	$(MAKE) -C ../tabbed install PREFIX="$(PREFIX)" DESTDIR="$(DESTDIR)"
 	$(MAKE) install PREFIX="$(PREFIX)" DESTDIR="$(DESTDIR)"
-	install -m 755 scripts/dwm-action scripts/dwm-session scripts/dwm-check scripts/dwm-background scripts/dwm-bluetooth scripts/dwm-calendar scripts/dwm-network scripts/dwm-status scripts/dwm-wallpaper scripts/dwm-weather scripts/dwm-wifi scripts/dwm-vpn scripts/dwm-mount scripts/dwm-window-menu "$(DESTDIR)$(PREFIX)/bin/"
+	install -m 755 scripts/dwm-action scripts/dwm-session scripts/dwm-check scripts/dwm-background scripts/dwm-bluetooth scripts/dwm-calendar scripts/dwm-network scripts/dwm-status scripts/dwm-wallpaper scripts/dwm-weather scripts/dwm-wifi scripts/dwm-vpn scripts/dwm-mount scripts/dwm-window-menu scripts/dwm-media-inhibit "$(DESTDIR)$(PREFIX)/bin/"
 	install -m 755 scripts/lock "$(DESTDIR)$(PREFIX)/bin/dwm-lock"
 	mkdir -p "$(DESTDIR)$(PREFIX)/share/dwm"
 	install -m 644 dunstrc wallpaper picom.conf redshift.conf "$(DESTDIR)$(PREFIX)/share/dwm/"

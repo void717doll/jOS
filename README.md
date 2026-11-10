@@ -6,6 +6,8 @@ workspaces, a launcher, terminal, grouped windows, and a screen locker. wifi,
 bluetooth, weather, and the calendar are on the bar. screenshots open flameshot.
 dunst handles notifications, and redshift warms the display overnight. their
 configs are bundled in `dwm/dunstrc` and `dwm/redshift.conf`.
+while an MPRIS player is playing, jOS pauses idle locking and blanking; after
+playback stops, the idle timer restarts.
 
 ## install
 

@@ -363,7 +363,7 @@ lockscreen(Display *dpy, struct xrandr *rr, int screen)
 					GrabModeAsync, None, lock->cursor, CurrentTime);
 		}
 		if (kbgrab != GrabSuccess) {
-			kbgrab = XGrabKeyboard(dpy, lock->root, True,
+			kbgrab = XGrabKeyboard(dpy, lock->root, False,
 					GrabModeAsync, GrabModeAsync, CurrentTime);
 		}
 

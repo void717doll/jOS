@@ -1,0 +1,57 @@
+#!/bin/sh
+set -eu
+
+inhibited=0
+inhibitor=
+
+media_playing() {
+	players=$(timeout 2 dbus-send --session --print-reply --dest=org.freedesktop.DBus \
+		/org/freedesktop/DBus org.freedesktop.DBus.ListNames 2>/dev/null |
+		awk -F '"' '/string "org\.mpris\.MediaPlayer2\./ { print $2 }') || return 1
+	for player in $players; do
+		status=$(timeout 1 dbus-send --session --print-reply --dest="$player" \
+			/org/mpris/MediaPlayer2 org.freedesktop.DBus.Properties.Get \
+			string:org.mpris.MediaPlayer2.Player string:PlaybackStatus 2>/dev/null || :)
+		case "$status" in
+		*'"Playing"'*) return 0 ;;
+		esac
+	done
+	return 1
+}
+
+stop_inhibitor() {
+	if [ -n "$inhibitor" ]; then
+		kill "$inhibitor" 2>/dev/null || :
+		wait "$inhibitor" 2>/dev/null || :
+		inhibitor=
+	fi
+}
+
+restore_idle() {
+	if [ "$inhibited" -eq 1 ]; then
+		xset s 300 300 || :
+		xset s reset || :
+		inhibited=0
+	fi
+	stop_inhibitor
+}
+
+trap 'exit 0' HUP INT TERM
+trap restore_idle EXIT
+
+while :; do
+	if media_playing; then
+		if [ "$inhibited" -eq 0 ]; then
+			xset s off || :
+			inhibited=1
+			if command -v systemd-inhibit >/dev/null 2>&1; then
+				systemd-inhibit --what=idle --mode=block --who=jOS \
+					--why='media playback' sleep infinity >/dev/null 2>&1 &
+				inhibitor=$!
+			fi
+		fi
+	else
+		restore_idle
+	fi
+	sleep 2
+done
