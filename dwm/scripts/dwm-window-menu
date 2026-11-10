@@ -15,14 +15,22 @@ NF >= 4 {
 		desktop++
 	if (title == "")
 		title = class
-	printf "%s  [%s] %s\n", id, desktop, title
+	labels[NR] = sprintf("[%s] %s", desktop, title)
+	ids[NR] = id
+	counts[labels[NR]]++
+}
+END {
+	for (i = 1; i <= NR; i++) {
+		label = labels[i]
+		if (counts[label] > 1)
+			label = label " (" ++seen[label] ")"
+		printf "%s\t%s\n", ids[i], label
+	}
 }')
 
 [ -n "$windows" ] || exit 0
-selection=$(printf '%s\n' "$windows" | dmenu -m "$monitor" -i -l 12 -p window) || exit 0
-id=${selection%% *}
+selection=$(printf '%s\n' "$windows" | cut -f2- | dmenu -m "$monitor" -i -l 12 -p window) || exit 0
+id=$(printf '%s\n' "$windows" | awk -F '\t' -v selection="$selection" '$2 == selection { print $1; exit }')
 
-case "$id" in
-0x[0-9a-fA-F]*) exec wmctrl -ia "$id" ;;
-*) exit 1 ;;
-esac
+[ -n "$id" ] || exit 1
+exec wmctrl -i -a "$id"
