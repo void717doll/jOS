@@ -1,14 +1,20 @@
 #!/usr/bin/env python3
+import html
 import json
 import os
 from pathlib import Path
+import re
 import subprocess
 import sys
+import tempfile
+import textwrap
 
 
-if '--show' not in sys.argv[1:]:
-    os.execlp('st', 'st', '-c', 'dwm-notifications', '-t', 'notifications', '-g', '72x20',
-              '-e', str(Path(__file__).resolve()), '--show')
+def field(notification, name, default=''):
+    value = notification.get(name, default)
+    if isinstance(value, dict) and 'data' in value:
+        value = value['data']
+    return default if value is None else value
 
 
 def entries(value):
@@ -16,36 +22,122 @@ def entries(value):
         for item in value:
             yield from entries(item)
     elif isinstance(value, dict):
-        summary = value.get('summary', '')
-        body = value.get('body', '')
-        if summary or body:
-            app = value.get('appname', '')
-            yield app, summary, body
+        if 'summary' in value or 'body' in value:
+            app = str(field(value, 'appname')).strip()
+            if not app.lower().startswith('dwm'):
+                yield {
+                    'app': app or 'unknown app',
+                    'summary': str(field(value, 'summary')).strip(),
+                    'body': str(field(value, 'body')).strip(),
+                    'id': field(value, 'id'),
+                    'timestamp': field(value, 'timestamp'),
+                }
         else:
             for item in value.values():
                 yield from entries(item)
 
 
-try:
-    result = subprocess.run(['dunstctl', 'history'], check=True, capture_output=True, text=True)
-    history = json.loads(result.stdout)
-except (OSError, subprocess.CalledProcessError, json.JSONDecodeError) as error:
-    print(f'could not read notification history: {error}')
-else:
-    notifications = list(entries(history))
-    if not notifications:
-        print('no notifications')
-    else:
-        for app, summary, body in notifications:
-            if app:
-                print(f'[{app}]')
-            if summary:
-                print(summary)
-            if body:
-                print(body)
-            print()
+def key(notification):
+    return json.dumps([
+        notification['id'], notification['timestamp'], notification['app'],
+        notification['summary'], notification['body'],
+    ], ensure_ascii=False, separators=(',', ':'))
 
-try:
-    input('press enter to close')
-except EOFError:
-    pass
+
+def read_history():
+    result = subprocess.run(['dunstctl', 'history'], check=True, capture_output=True,
+                            text=True, timeout=2)
+    return list(entries(json.loads(result.stdout)))
+
+
+def state_path():
+    state_home = os.environ.get('XDG_STATE_HOME') or str(Path.home() / '.local/state')
+    return Path(state_home) / 'dwm/notifications-read.json'
+
+
+def save_read(keys):
+    path = state_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', dir=path.parent,
+                                     prefix=path.name + '.', delete=False) as temporary:
+        json.dump(sorted(keys), temporary, ensure_ascii=False)
+        temporary.write('\n')
+    os.replace(temporary.name, path)
+
+
+def unread_count(notifications, mark_read=False):
+    keys = {key(notification) for notification in notifications}
+    path = state_path()
+    if path.exists():
+        try:
+            read = set(json.loads(path.read_text())) & keys
+        except (OSError, json.JSONDecodeError, TypeError):
+            read = set()
+    else:
+        read = set()
+    count = len(keys - read)
+    if mark_read:
+        save_read(keys)
+    return count
+
+
+def clean(value):
+    value = html.unescape(value)
+    value = re.sub(r'\x1b\[[0-?]*[ -/]*[@-~]', '', value)
+    return ''.join(char for char in value if char in '\n\t' or ord(char) >= 32)
+
+
+def show_history():
+    try:
+        notifications = read_history()
+    except (OSError, subprocess.SubprocessError, json.JSONDecodeError):
+        print('could not load notification history')
+        return
+
+    unread = unread_count(notifications, mark_read=True)
+    try:
+        subprocess.Popen([str(Path(__file__).with_name('dwm-status')), '--refresh'],
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                         start_new_session=True)
+    except OSError:
+        pass
+    print('notification history')
+    print('=' * 72)
+    print(f'{len(notifications)} saved  |  {unread} unread')
+    if not notifications:
+        print('\nno notifications')
+
+    def newest_first(notification):
+        try:
+            return float(notification['timestamp'])
+        except (TypeError, ValueError):
+            return 0
+
+    for notification in sorted(notifications, key=newest_first, reverse=True):
+        app = clean(notification['app'])
+        summary = clean(notification['summary'])
+        body = clean(notification['body'])
+        print('\n' + '-' * 72)
+        print(textwrap.fill(f'[{app}]', width=72))
+        if summary:
+            print(textwrap.fill(summary, width=72))
+        if body:
+            print(textwrap.fill(body, width=70, subsequent_indent='  '))
+    print('\npress enter to close', flush=True)
+    try:
+        input()
+    except EOFError:
+        pass
+
+
+if '--count' in sys.argv[1:]:
+    try:
+        notifications = read_history()
+        print(unread_count(notifications))
+    except (OSError, subprocess.SubprocessError, json.JSONDecodeError):
+        print(0)
+elif '--show' in sys.argv[1:]:
+    show_history()
+else:
+    os.execlp('st', 'st', '-c', 'dwm-notifications', '-t', 'notifications', '-g', '76x24',
+              '-e', str(Path(__file__).resolve()), '--show')

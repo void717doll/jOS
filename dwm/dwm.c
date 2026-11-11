@@ -1894,8 +1894,6 @@ restack(Monitor *m)
 	drawbar(m);
 	if (!m->sel)
 		return;
-	if (m->sel->isfloating || !m->lt[m->sellt]->arrange)
-		XRaiseWindow(dpy, m->sel->win);
 	if (m->lt[m->sellt]->arrange) {
 		wc.stack_mode = Below;
 		wc.sibling = m->barwin;
@@ -1912,6 +1910,15 @@ restack(Monitor *m)
 	}
 	for (c = m->clients; c; c = c->next)
 		updatehandles(c);
+	if (m->sel->isfloating || !m->lt[m->sellt]->arrange) {
+		/* restack decorations last so focusing one float leaves it on top. */
+		if (m->sel->titlebar)
+			XRaiseWindow(dpy, m->sel->titlebar);
+		XRaiseWindow(dpy, m->sel->win);
+		if (m->sel->handlesmapped)
+			for (unsigned int i = 0; i < LENGTH(m->sel->handles); i++)
+				XRaiseWindow(dpy, m->sel->handles[i]);
+	}
 	XSync(dpy, False);
 	while (XCheckMaskEvent(dpy, EnterWindowMask, &ev));
 }

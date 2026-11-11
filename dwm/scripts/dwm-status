@@ -105,11 +105,8 @@ status() {
 	audio sink @DEFAULT_SINK@
 	brightness
 	weather=$(cached weather-oceanside 300 "$bindir/dwm-weather")
-	notifications=0
-	if command -v dunstctl >/dev/null 2>&1; then
-		notifications=$(timeout 2 dunstctl count history 2>/dev/null | awk '{print $NF}')
-		case "$notifications" in ''|*[!0-9]*) notifications=0 ;; esac
-	fi
+	notifications=$("$bindir/dwm-notifications" --count 2>/dev/null) || notifications=0
+	case "$notifications" in ''|*[!0-9]*) notifications=0 ;; esac
 	notification_text=''
 	[ "$notifications" -eq 0 ] || notification_text="$notification_text $notifications"
 	if [ "${1:-}" = color ]; then
