@@ -9,7 +9,7 @@ import termios
 import tty
 
 if '--show' not in sys.argv[1:]:
-    os.execlp('st', 'st', '-c', 'dwm-calendar', '-t', 'calendar', '-g', '80x30',
+    os.execlp('st', 'st', '-c', 'dwm-calendar', '-t', 'calendar', '-g', '36x22',
               '-e', str(Path(__file__).resolve()), '--show')
 
 
@@ -91,7 +91,8 @@ def render_month(year, month):
     for holiday, name, observed in holidays:
         suffix = ' (observed)' if observed else ''
         print(f'{holiday.day:2}  {name}{suffix}'.lower())
-    print('\nleft/right: previous/next month    t: today    q: close', end='', flush=True)
+    print('\nleft/right: previous/next month')
+    print('t: today   q: close', end='', flush=True)
 
 
 def read_key(fd):

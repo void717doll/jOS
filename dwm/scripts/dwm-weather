@@ -37,7 +37,7 @@ def weather_art(code):
 
 
 if '--forecast' in sys.argv[1:]:
-    os.execlp('st', 'st', '-c', 'dwm-weather', '-t', 'weather', '-g', '80x30',
+    os.execlp('st', 'st', '-c', 'dwm-weather', '-t', 'weather', '-g', '54x20',
               '-e', sys.executable, os.path.abspath(__file__), '--show-forecast')
 
 if '--show-forecast' in sys.argv[1:]:
