@@ -40,6 +40,7 @@ static size_t totalitems;
 static char text[BUFSIZ] = "";
 static char *embed;
 static int bh, mw, mh;
+static int outsideclick, menu_x, menu_y;
 static int inputw = 0, promptw;
 static int lrpad; /* sum of left and right padding */
 static size_t cursor;
@@ -624,6 +625,13 @@ buttonpress(XButtonEvent *ev)
 	struct item *item;
 	int x, right, width;
 
+	if (outsideclick && (ev->x_root < menu_x || ev->x_root >= menu_x + mw ||
+	                      ev->y_root < menu_y || ev->y_root >= menu_y + mh)) {
+		XAllowEvents(dpy, ReplayPointer, ev->time);
+		cleanup();
+		exit(1);
+	}
+
 	if (ev->button == Button4 || ev->button == Button5) {
 		if (ev->button == Button4 && sel && sel->left) {
 			if ((sel = sel->left)->right == curr) {
@@ -872,6 +880,8 @@ setup(void)
 	inputw = mw / 3; /* input width: ~33% of monitor width */
 	match();
 
+	menu_x = x;
+	menu_y = y;
 	/* create menu window */
 	swa.override_redirect = True;
 	swa.background_pixel = scheme[SchemeNorm][ColBg].pixel;
@@ -890,6 +900,10 @@ setup(void)
 	                XNClientWindow, win, XNFocusWindow, win, NULL);
 
 	XMapRaised(dpy, win);
+	if (outsideclick && XGrabPointer(dpy, win, False,
+	        ButtonPressMask|PointerMotionMask, GrabModeAsync, GrabModeAsync,
+	        None, None, CurrentTime) != GrabSuccess)
+		outsideclick = 0;
 	if (embed) {
 		XReparentWindow(dpy, win, parentwin, x, y);
 		XSelectInput(dpy, parentwin, FocusChangeMask | SubstructureNotifyMask);
@@ -907,7 +921,7 @@ setup(void)
 static void
 usage(void)
 {
-	die("usage: dmenu [-bfiv] [-l lines] [-p prompt] [-fn font] [-m monitor]\n"
+	die("usage: dmenu [-bfivo] [-l lines] [-p prompt] [-fn font] [-m monitor]\n"
 	    "             [-nb color] [-nf color] [-sb color] [-sf color] [-w windowid]\n"
 	    "             [-hb color] [-hf color] [-hp items]");
 }
@@ -928,6 +942,8 @@ main(int argc, char *argv[])
 			centered = 0;
 		} else if (!strcmp(argv[i], "-f"))   /* grabs keyboard before reading stdin */
 			fast = 1;
+		else if (!strcmp(argv[i], "-o"))
+			outsideclick = 1;
 		else if (!strcmp(argv[i], "-i")) { /* case-insensitive item matching */
 			fstrncmp = strncasecmp;
 			fstrstr = cistrstr;

@@ -3,7 +3,7 @@
 dmenu \- dynamic menu
 .SH SYNOPSIS
 .B dmenu
-.RB [ \-bfiv ]
+.RB [ \-bfivo ]
 .RB [ \-l
 .IR lines ]
 .RB [ \-m
@@ -63,6 +63,9 @@ dmenu lists items vertically, with the given number of lines.
 .BI \-m " monitor"
 dmenu is displayed on the monitor number supplied. Monitor numbers are starting
 from 0.
+.TP
+.B \-o
+close when clicked outside the menu and pass that click to the window underneath.
 .TP
 .BI \-p " prompt"
 defines the prompt to be displayed to the left of the input field.
