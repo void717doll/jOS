@@ -297,6 +297,7 @@ static void unmanage(Client *c, int destroyed);
 static void unmapnotify(XEvent *e);
 static void updatebarpos(Monitor *m);
 static void updatebars(void);
+static void updateclientdesktop(Client *c);
 static void updateclientlist(void);
 static int updategeom(void);
 static void updatenumlockmask(void);
@@ -351,7 +352,7 @@ static void (*handler[LASTEvent]) (XEvent *) = {
 	[ReparentNotify] = reparentnotify,
 	[UnmapNotify] = unmapnotify
 };
-static Atom wmatom[WMLast], netatom[NetLast], xatom[XLast], logoutatom, hotcorneratom;
+static Atom wmatom[WMLast], netatom[NetLast], xatom[XLast], logoutatom, hotcorneratom, netwmdesktop;
 static int running = 1;
 static Cur *cursor[CurLast];
 static Cursor edgecursors[8];
@@ -1425,6 +1426,7 @@ manage(Window w, XWindowAttributes *wa)
 			c->mon = recttomon(px, py, 1, 1);
 		applyrules(c);
 	}
+	updateclientdesktop(c);
 
 	c->bw = borderpx;
 	createtitlebar(c);
@@ -1954,6 +1956,7 @@ sendmon(Client *c, Monitor *m)
 	detachstack(c);
 	c->mon = m;
 	c->tags = m->tagset[m->seltags]; /* assign tags of target monitor */
+	updateclientdesktop(c);
 	attach(c);
 	attachstack(c);
 	if (c->isfullscreen)
@@ -2128,6 +2131,7 @@ setup(void)
 	wmatom[WMState] = XInternAtom(dpy, "WM_STATE", False);
 	wmatom[WMTakeFocus] = XInternAtom(dpy, "WM_TAKE_FOCUS", False);
 	netatom[NetActiveWindow] = XInternAtom(dpy, "_NET_ACTIVE_WINDOW", False);
+	netwmdesktop = XInternAtom(dpy, "_NET_WM_DESKTOP", False);
 	netatom[NetSupported] = XInternAtom(dpy, "_NET_SUPPORTED", False);
 	char trayname[64];
 	snprintf(trayname, sizeof trayname, "_NET_SYSTEM_TRAY_S%d", screen);
@@ -2252,6 +2256,7 @@ tag(const Arg *arg)
 {
 	if (selmon->sel && arg->ui & TAGMASK) {
 		selmon->sel->tags = arg->ui & TAGMASK;
+		updateclientdesktop(selmon->sel);
 		focus(NULL);
 		arrange(selmon);
 	}
@@ -2399,6 +2404,7 @@ toggletag(const Arg *arg)
 	newtags = selmon->sel->tags ^ (arg->ui & TAGMASK);
 	if (newtags) {
 		selmon->sel->tags = newtags;
+		updateclientdesktop(selmon->sel);
 		focus(NULL);
 		arrange(selmon);
 	}
@@ -2524,6 +2530,25 @@ updatebarpos(Monitor *m)
 		m->wy = m->topbar ? m->wy + bh : m->wy;
 	} else
 		m->by = -bh;
+}
+
+void
+updateclientdesktop(Client *c)
+{
+	unsigned int i, count = 0;
+	unsigned long desktop = 0xffffffffUL;
+
+	for (i = 0; i < LENGTH(tags); i++) {
+		if (c->tags & (1u << i)) {
+			desktop = i;
+			if (++count > 1) {
+				desktop = 0xffffffffUL;
+				break;
+			}
+		}
+	}
+	XChangeProperty(dpy, c->win, netwmdesktop, XA_CARDINAL, 32,
+	                PropModeReplace, (unsigned char *)&desktop, 1);
 }
 
 void
