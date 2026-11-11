@@ -2,43 +2,62 @@
 set -eu
 
 bindir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-directory=$HOME/Pictures/wallpapers
+wallroot=${DWM_WALLS_DIR:-$HOME/Pictures/walls}
+legacy=$HOME/Pictures/wallpapers
 config=${XDG_CONFIG_HOME:-"$HOME/.config"}/dwm
 history=$config/wallpaper.previous
 undo='[undo last change]'
-random='[random]'
+randomdir='[random directory + wallpaper]'
+randomfile='[random wallpaper]'
+wall_dirs=()
+wall_labels=()
+wall_depths=()
 files=()
-if [ -d "$directory" ]; then
-	while IFS= read -r -d '' path; do
-		# dmenu uses one line per choice, so skip names containing newlines.
-		[[ "$path" != *$'\n'* ]] || continue
-		files+=("${path#"$directory/"}")
-	done < <(find "$directory" -type f \( -iname '*.png' -o -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.webp' \) -print0 | sort -z)
-fi
-if [ "${#files[@]}" -eq 0 ] && [ ! -f "$history" ]; then
-	printf 'dwm: no wallpapers found in %s\n' "$directory" >&2
-	exit 1
-fi
-choice=$({
-	[ ! -f "$history" ] || printf '%s\n' "$undo"
-	if [ "${#files[@]}" -gt 0 ]; then
-		printf '%s\n' "$random" "${files[@]}"
-	fi
-} | dmenu -i -l 12 -p 'wallpaper:') || exit 0
 
-undoing=false
-target=
-if [ "$choice" = "$undo" ] && [ -f "$history" ]; then
-	IFS= read -r target < "$history" || :
-	undoing=true
-elif [ "$choice" = "$random" ] && [ "${#files[@]}" -gt 0 ]; then
-	: # select after reading the current wallpaper so it can be excluded.
-else
-	for path in "${files[@]}"; do
-		[ "$choice" != "$path" ] || target=$directory/$path
-	done
-	# arbitrary text entered in dmenu is not a wallpaper selection.
-	[ -n "$target" ] || exit 0
+has_image() {
+	find "$1" -type f \( -iname '*.png' -o -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.webp' \) -print -quit | grep -q .
+}
+
+add_directory() {
+	local path=$1 label=$2 depth=$3
+	if has_image "$path"; then
+		wall_dirs+=("$path")
+		wall_labels+=("$label")
+		wall_depths+=("$depth")
+	fi
+}
+
+load_files() {
+	local path
+	files=()
+	if [ "${wall_depths[$selected_index]}" = 1 ]; then
+		while IFS= read -r -d '' path; do
+			[[ "$path" != *$'\n'* ]] || continue
+			files+=("${path#"$selected_directory/"}")
+		done < <(find "$selected_directory" -maxdepth 1 -type f \( -iname '*.png' -o -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.webp' \) -print0 | sort -z)
+	else
+		while IFS= read -r -d '' path; do
+			[[ "$path" != *$'\n'* ]] || continue
+			files+=("${path#"$selected_directory/"}")
+		done < <(find "$selected_directory" -type f \( -iname '*.png' -o -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.webp' \) -print0 | sort -z)
+	fi
+}
+
+if [ -d "$wallroot" ]; then
+	if find "$wallroot" -maxdepth 1 -type f \( -iname '*.png' -o -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.webp' \) -print -quit | grep -q .; then
+		wall_dirs+=("$wallroot")
+		wall_labels+=('walls/')
+		wall_depths+=(1)
+	fi
+	while IFS= read -r -d '' path; do
+		name=${path##*/}
+		[[ "$name" != .* && "$name" != *$'\n'* ]] || continue
+		add_directory "$path" "walls/$name/" recursive
+	done < <(find "$wallroot" -mindepth 1 -maxdepth 1 -type d -print0 | sort -z)
+fi
+
+if [ -d "$legacy" ]; then
+	add_directory "$legacy" 'Pictures/wallpapers/' recursive
 fi
 
 current=
@@ -55,14 +74,68 @@ fi
 current=${current#file://}
 case "$current" in '~/'*) current=$HOME/${current#\~/} ;; esac
 [ -f "$current" ] || current=
-if [ "$choice" = "$random" ]; then
-	candidates=()
-	for path in "${files[@]}"; do
-		[ "$directory/$path" = "$current" ] || candidates+=("$directory/$path")
-	done
-	[ "${#candidates[@]}" -gt 0 ] || exit 0
-	target=$(shuf -n 1 -e -- "${candidates[@]}")
+
+choice=$({
+	[ ! -f "$history" ] || printf '%s\n' "$undo"
+	if [ "${#wall_dirs[@]}" -gt 0 ]; then
+		printf '%s\n' "$randomdir"
+		printf '%s\n' "${wall_labels[@]}"
+	fi
+} | dmenu -i -l 12 -p 'wallpaper directory:') || exit 0
+
+undoing=false
+target=
+if [ "$choice" = "$undo" ] && [ -f "$history" ]; then
+	IFS= read -r target < "$history" || :
+	undoing=true
+else
+	selected_directory=
+	selected_index=-1
+	if [ "$choice" = "$randomdir" ]; then
+		[ "${#wall_dirs[@]}" -gt 0 ] || exit 0
+		for i in $(shuf -i "0-$(( ${#wall_dirs[@]} - 1 ))"); do
+			selected_index=$i
+			selected_directory=${wall_dirs[$i]}
+			load_files
+			candidates=()
+			for path in "${files[@]}"; do
+				[ "$selected_directory/$path" = "$current" ] || candidates+=("$selected_directory/$path")
+			done
+			if [ "${#candidates[@]}" -gt 0 ]; then
+				target=$(shuf -n 1 -e -- "${candidates[@]}")
+				break
+			fi
+		done
+		[ -n "$target" ] || exit 0
+	else
+		for i in "${!wall_labels[@]}"; do
+			if [ "$choice" = "${wall_labels[$i]}" ]; then
+				selected_index=$i
+				break
+			fi
+		done
+		[ "$selected_index" -ge 0 ] || exit 0
+		selected_directory=${wall_dirs[$selected_index]}
+		[ -n "$selected_directory" ] || exit 0
+		load_files
+		[ "${#files[@]}" -gt 0 ] || exit 0
+		choice=$(printf '%s\n' "$randomfile" "${files[@]}" | dmenu -i -l 12 -p 'wallpaper:') || exit 0
+		if [ "$choice" = "$randomfile" ]; then
+			candidates=()
+			for path in "${files[@]}"; do
+				[ "$selected_directory/$path" = "$current" ] || candidates+=("$selected_directory/$path")
+			done
+			[ "${#candidates[@]}" -gt 0 ] || exit 0
+			target=$(shuf -n 1 -e -- "${candidates[@]}")
+		else
+			for path in "${files[@]}"; do
+				[ "$choice" != "$path" ] || target=$selected_directory/$path
+			done
+			[ -n "$target" ] || exit 0
+		fi
+	fi
 fi
+
 if [ "$undoing" = false ] && [ "$target" = "$current" ]; then exit 0; fi
 
 mkdir -p "$config"
