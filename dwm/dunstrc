@@ -6,6 +6,8 @@
     width = 300
     height = (0, 180)
     notification_limit = 3
+    history = ctrl+grave
+    history_length = 50
     gap_size = 6
     font = monospace 14
     format = "%s\n%b"
@@ -45,7 +47,6 @@
     appname = dwm
     format = "%s"
     markup = no
-    history_ignore = yes
 
 [muted_audio]
     category = control.muted
