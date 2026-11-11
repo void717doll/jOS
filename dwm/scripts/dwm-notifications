@@ -1,0 +1,51 @@
+#!/usr/bin/env python3
+import json
+import os
+from pathlib import Path
+import subprocess
+import sys
+
+
+if '--show' not in sys.argv[1:]:
+    os.execlp('st', 'st', '-c', 'dwm-notifications', '-t', 'notifications', '-g', '72x20',
+              '-e', str(Path(__file__).resolve()), '--show')
+
+
+def entries(value):
+    if isinstance(value, list):
+        for item in value:
+            yield from entries(item)
+    elif isinstance(value, dict):
+        summary = value.get('summary', '')
+        body = value.get('body', '')
+        if summary or body:
+            app = value.get('appname', '')
+            yield app, summary, body
+        else:
+            for item in value.values():
+                yield from entries(item)
+
+
+try:
+    result = subprocess.run(['dunstctl', 'history'], check=True, capture_output=True, text=True)
+    history = json.loads(result.stdout)
+except (OSError, subprocess.CalledProcessError, json.JSONDecodeError) as error:
+    print(f'could not read notification history: {error}')
+else:
+    notifications = list(entries(history))
+    if not notifications:
+        print('no notifications')
+    else:
+        for app, summary, body in notifications:
+            if app:
+                print(f'[{app}]')
+            if summary:
+                print(summary)
+            if body:
+                print(body)
+            print()
+
+try:
+    input('press enter to close')
+except EOFError:
+    pass

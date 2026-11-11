@@ -105,19 +105,26 @@ status() {
 	audio sink @DEFAULT_SINK@
 	brightness
 	weather=$(cached weather-oceanside 300 "$bindir/dwm-weather")
+	notifications=0
+	if command -v dunstctl >/dev/null 2>&1; then
+		notifications=$(timeout 2 dunstctl count history 2>/dev/null | awk '{print $NF}')
+		case "$notifications" in ''|*[!0-9]*) notifications=0 ;; esac
+	fi
+	notification_text=''
+	[ "$notifications" -eq 0 ] || notification_text="$notification_text $notifications"
 	if [ "${1:-}" = color ]; then
 		battery color
 		wifi=$(cached wifi-levels 10 "$bindir/dwm-wifi" --color)
 		bluetooth=$("$bindir/dwm-bluetooth" --color)
-		printf "%s   \\001%s %s\\001   \\001%s %s\\001   %s   %s   \\032%s\\033   \\026%s %s\\027\n" \
-			"$battery_text" "$audio_icon" "$audio_text" "$light_icon" "$light_text" "$wifi" "$bluetooth" "$weather" "$clock_icon" \
+		printf "%s   \\001%s %s\\001   \\001%s %s\\001   %s   %s   \\032%s\\033   \\034%s\\035   \\026%s %s\\027\n" \
+			"$battery_text" "$audio_icon" "$audio_text" "$light_icon" "$light_text" "$wifi" "$bluetooth" "$weather" "$notification_text" "$clock_icon" \
 			"$(date '+%m/%d/%Y %I:%M %p' | tr '[:upper:]' '[:lower:]')"
 	else
 		battery
 		wifi=$("$bindir/dwm-wifi")
 		bluetooth=$("$bindir/dwm-bluetooth" --status)
-		printf '%s   %s %s   %s %s   %s   %s   \032%s\033   %s %s\n' \
-			"$battery_text" "$audio_icon" "$audio_text" "$light_icon" "$light_text" "$wifi" "$bluetooth" "$weather" "$clock_icon" \
+		printf '%s   %s %s   %s %s   %s   %s   \032%s\033   \034%s\035   \026%s %s\n' \
+			"$battery_text" "$audio_icon" "$audio_text" "$light_icon" "$light_text" "$wifi" "$bluetooth" "$weather" "$notification_text" "$clock_icon" \
 			"$(date '+%m/%d/%Y %I:%M %p' | tr '[:upper:]' '[:lower:]')"
 	fi
 }

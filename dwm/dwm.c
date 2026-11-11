@@ -77,7 +77,7 @@ enum { NetSupported, NetWMName, NetWMState, NetWMCheck,
 	NetWMWindowTypeDialog, NetClientList, NetWMFrameExtents, NetLast }; /* EWMH atoms */
 enum { Manager, Xembed, XembedInfo, XLast };
 enum { WMProtocols, WMDelete, WMState, WMTakeFocus, WMLast }; /* default atoms */
-enum { ClkTagBar, ClkLtSymbol, ClkStatusText, ClkWifi, ClkBluetooth, ClkWeather, ClkClock, ClkWinTitle,
+enum { ClkTagBar, ClkLtSymbol, ClkStatusText, ClkWifi, ClkBluetooth, ClkWeather, ClkClock, ClkNotifications, ClkWinTitle,
 	ClkClientWin, ClkRootWin, ClkLast }; /* clicks */
 
 typedef union {
@@ -326,6 +326,7 @@ static int wifistart = -1, wifiend = -1;
 static int bluetoothstart = -1, bluetoothend = -1;
 static int weatherstart = -1, weatherend = -1;
 static int clockstart = -1, clockend = -1;
+static int notificationsstart = -1, notificationsend = -1;
 static int screen;
 static int sw, sh;           /* X display screen geometry width, height */
 static int bh;               /* bar height */
@@ -573,6 +574,8 @@ buttonpress(XEvent *e)
 				click = ClkWeather;
 			else if (clockstart >= 0 && ev->x >= statusx + clockstart && ev->x < statusx + clockend)
 				click = ClkClock;
+			else if (notificationsstart >= 0 && ev->x >= statusx + notificationsstart && ev->x < statusx + notificationsend)
+				click = ClkNotifications;
 		} else {
 			click = ClkWinTitle;
 			for (c = selmon->clients; c; c = c->next)
@@ -923,6 +926,7 @@ statusbar(int x, int draw)
 	bluetoothstart = bluetoothend = -1;
 	weatherstart = weatherend = -1;
 	clockstart = clockend = -1;
+	notificationsstart = notificationsend = -1;
 	while (*p) {
 		if (*p < 32) {
 			if (*p == 7)
@@ -941,6 +945,10 @@ statusbar(int x, int draw)
 				weatherstart = x - start;
 			else if (*p == 27)
 				weatherend = x - start;
+			else if (*p == 28)
+				notificationsstart = x - start;
+			else if (*p == 29)
+				notificationsend = x - start;
 			else if (*p >= 17 && *p <= 21)
 				signalbars = *p - 16;
 			else
