@@ -351,7 +351,7 @@ static void (*handler[LASTEvent]) (XEvent *) = {
 	[ReparentNotify] = reparentnotify,
 	[UnmapNotify] = unmapnotify
 };
-static Atom wmatom[WMLast], netatom[NetLast], xatom[XLast], logoutatom;
+static Atom wmatom[WMLast], netatom[NetLast], xatom[XLast], logoutatom, hotcorneratom;
 static int running = 1;
 static Cur *cursor[CurLast];
 static Cursor edgecursors[8];
@@ -1676,6 +1676,11 @@ propertynotify(XEvent *e)
 		XDeleteProperty(dpy, root, logoutatom);
 		return;
 	}
+	if (ev->window == root && ev->atom == hotcorneratom && ev->state == PropertyNewValue) {
+		hotcorneractive = 0;
+		XDeleteProperty(dpy, root, hotcorneratom);
+		return;
+	}
 	if ((ev->window == root) && (ev->atom == XA_WM_NAME))
 		updatestatus();
 	else if (ev->state == PropertyDelete)
@@ -2114,6 +2119,8 @@ setup(void)
 	updategeom();
 	logoutatom = XInternAtom(dpy, "_DWM_LOGOUT", False);
 	XDeleteProperty(dpy, root, logoutatom);
+	hotcorneratom = XInternAtom(dpy, "_DWM_HOTCORNER_RESET", False);
+	XDeleteProperty(dpy, root, hotcorneratom);
 	/* init atoms */
 	utf8string = XInternAtom(dpy, "UTF8_STRING", False);
 	wmatom[WMProtocols] = XInternAtom(dpy, "WM_PROTOCOLS", False);

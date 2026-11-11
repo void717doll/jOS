@@ -1,6 +1,11 @@
 #!/bin/sh
 set -eu
 
+reset_hotcorner() {
+	xprop -root -f _DWM_HOTCORNER_RESET 8s -set _DWM_HOTCORNER_RESET reset >/dev/null 2>&1 || :
+}
+trap reset_hotcorner EXIT
+
 monitor=${1:-0}
 windows=$(wmctrl -l -x | awk '
 NF >= 4 {
@@ -33,4 +38,4 @@ selection=$(printf '%s\n' "$windows" | cut -f2- | dmenu -m "$monitor" -i -l 12 -
 id=$(printf '%s\n' "$windows" | awk -F '\t' -v selection="$selection" '$2 == selection { print $1; exit }')
 
 [ -n "$id" ] || exit 1
-exec wmctrl -i -a "$id"
+wmctrl -i -a "$id"
