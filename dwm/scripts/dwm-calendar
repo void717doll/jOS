@@ -3,11 +3,15 @@ import calendar
 from datetime import date, timedelta
 import os
 from pathlib import Path
+import select
 import sys
+import termios
+import tty
 
 if '--show' not in sys.argv[1:]:
     os.execlp('st', 'st', '-c', 'dwm-calendar', '-t', 'calendar', '-g', '80x30',
               '-e', str(Path(__file__).resolve()), '--show')
+
 
 def nth_weekday(year, month, weekday, occurrence):
     first = date(year, month, 1)
@@ -43,11 +47,6 @@ def federal_holidays(year):
     return observed
 
 
-today = date.today()
-calendar.setfirstweekday(calendar.SUNDAY)
-holidays = [item for year in (today.year - 1, today.year, today.year + 1)
-            for item in federal_holidays(year)
-            if item[0].year == today.year and item[0].month == today.month]
 holiday_labels = {
     "new year's day": 'new year',
     'martin luther king jr. day': 'mlk day',
@@ -61,24 +60,82 @@ holiday_labels = {
     'thanksgiving': 'thanks',
     'christmas day': 'christmas',
 }
-events = {holiday.day: holiday_labels[name] for holiday, name, _ in holidays}
-width = 76
-print(f'{today:%B %Y}'.center(width).lower())
-print(' '.join(day.center(10) for day in ('su', 'mo', 'tu', 'we', 'th', 'fr', 'sa')))
-for week in calendar.monthcalendar(today.year, today.month):
-    dates = []
-    labels = []
-    for day in week:
-        if day == today.day:
-            dates.append('    \033[7m' + f'{day:2}' + '\033[0m    ')
-        else:
-            dates.append(f'{day:2}'.center(10) if day else ' ' * 10)
-        labels.append(events.get(day, '').center(10))
-    print(' '.join(dates))
-    print(' '.join(labels))
-print('\n* us federal holidays')
-for holiday, name, observed in holidays:
-    suffix = ' (observed)' if observed else ''
-    print(f'{holiday:%b} {holiday.day:2}  {name}{suffix}'.lower())
-print('\nenter to close', end='', flush=True)
-sys.stdin.readline()
+
+
+def render_month(year, month):
+    calendar.setfirstweekday(calendar.SUNDAY)
+    holidays = [item for holiday_year in (year - 1, year, year + 1)
+                for item in federal_holidays(holiday_year)
+                if item[0].year == year and item[0].month == month]
+    events = {holiday.day: holiday_labels[name] for holiday, name, _ in holidays}
+    today = date.today()
+    width = 76
+    print(f'{calendar.month_name[month]} {year}'.center(width).lower())
+    print(' '.join(day.center(10) for day in ('su', 'mo', 'tu', 'we', 'th', 'fr', 'sa')))
+    for week in calendar.monthcalendar(year, month):
+        dates = []
+        labels = []
+        for day in week:
+            if day == today.day and month == today.month and year == today.year:
+                dates.append('    \033[7m' + f'{day:2}' + '\033[0m    ')
+            else:
+                dates.append(f'{day:2}'.center(10) if day else ' ' * 10)
+            labels.append(events.get(day, '').center(10))
+        print(' '.join(dates))
+        print(' '.join(labels))
+    print('\n* us federal holidays')
+    for holiday, name, observed in holidays:
+        suffix = ' (observed)' if observed else ''
+        print(f'{holiday:%b} {holiday.day:2}  {name}{suffix}'.lower())
+    print('\nleft/right: previous/next month    t: today    q: close', end='', flush=True)
+
+
+def read_key(fd):
+    key = os.read(fd, 1)
+    if key == b'\x1b':
+        ready, _, _ = select.select([fd], [], [], 0.08)
+        if ready:
+            if os.read(fd, 1) == b'[':
+                ready, _, _ = select.select([fd], [], [], 0.08)
+                if ready:
+                    key = os.read(fd, 1)
+                    if key == b'D':
+                        return 'previous'
+                    if key == b'C':
+                        return 'next'
+        return 'quit'
+    if key in (b'h', b'H'):
+        return 'previous'
+    if key in (b'l', b'L'):
+        return 'next'
+    if key in (b't', b'T'):
+        return 'today'
+    if key in (b'q', b'Q', b'\r', b'\n'):
+        return 'quit'
+    return ''
+
+
+month = date.today().replace(day=1)
+fd = sys.stdin.fileno()
+if not sys.stdin.isatty():
+    render_month(month.year, month.month)
+    print()
+else:
+    original = termios.tcgetattr(fd)
+    try:
+        tty.setraw(fd)
+        while True:
+            print('\033[2J\033[H', end='')
+            render_month(month.year, month.month)
+            key = read_key(fd)
+            if key == 'quit':
+                break
+            if key == 'today':
+                month = date.today().replace(day=1)
+            elif key == 'previous':
+                month = (month - timedelta(days=1)).replace(day=1)
+            elif key == 'next':
+                month = (month.replace(day=28) + timedelta(days=4)).replace(day=1)
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, original)
+        print('\033[0m\033[2J\033[H', end='', flush=True)
