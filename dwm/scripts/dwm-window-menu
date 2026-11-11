@@ -34,7 +34,7 @@ END {
 }')
 
 [ -n "$windows" ] || exit 0
-selection=$(printf '%s\n' "$windows" | cut -f2- | dmenu -m "$monitor" -i -l 12 -o -p window) || exit 0
+selection=$(printf '%s\n' "$windows" | cut -f2- | dmenu -m "$monitor" -i -l 12 -p window) || exit 0
 id=$(printf '%s\n' "$windows" | awk -F '\t' -v selection="$selection" '$2 == selection { print $1; exit }')
 
 [ -n "$id" ] || exit 1

@@ -3,7 +3,7 @@
 dmenu \- dynamic menu
 .SH SYNOPSIS
 .B dmenu
-.RB [ \-bfivo ]
+.RB [ \-bfiv ]
 .RB [ \-l
 .IR lines ]
 .RB [ \-m
@@ -64,9 +64,6 @@ dmenu lists items vertically, with the given number of lines.
 dmenu is displayed on the monitor number supplied. Monitor numbers are starting
 from 0.
 .TP
-.B \-o
-close when clicked outside the menu and pass that click to the window underneath.
-.TP
 .BI \-p " prompt"
 defines the prompt to be displayed to the left of the input field.
 .TP
@@ -117,6 +114,7 @@ dmenu can be used with the keyboard or mouse. moving the pointer over an item
 highlights it. left-click an item to select it. the scroll wheel moves the
 selection through the list. keyboard navigation uses the arrow keys, page up,
 page down, home, and end.
+clicking outside the menu closes it and passes the click to the window underneath.
 .TP
 .B Tab
 Copy the selected item to the input field.

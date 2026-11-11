@@ -40,7 +40,7 @@ static size_t totalitems;
 static char text[BUFSIZ] = "";
 static char *embed;
 static int bh, mw, mh;
-static int outsideclick, menu_x, menu_y;
+static int outsideclick = 1, menu_x, menu_y;
 static int inputw = 0, promptw;
 static int lrpad; /* sum of left and right padding */
 static size_t cursor;
@@ -625,7 +625,7 @@ buttonpress(XButtonEvent *ev)
 	struct item *item;
 	int x, right, width;
 
-	if (outsideclick && (ev->x_root < menu_x || ev->x_root >= menu_x + mw ||
+	if (outsideclick && !embed && (ev->x_root < menu_x || ev->x_root >= menu_x + mw ||
 	                      ev->y_root < menu_y || ev->y_root >= menu_y + mh)) {
 		XAllowEvents(dpy, ReplayPointer, ev->time);
 		cleanup();
@@ -900,7 +900,7 @@ setup(void)
 	                XNClientWindow, win, XNFocusWindow, win, NULL);
 
 	XMapRaised(dpy, win);
-	if (outsideclick && XGrabPointer(dpy, win, False,
+	if (outsideclick && !embed && XGrabPointer(dpy, win, False,
 	        ButtonPressMask|PointerMotionMask, GrabModeAsync, GrabModeAsync,
 	        None, None, CurrentTime) != GrabSuccess)
 		outsideclick = 0;
@@ -921,7 +921,7 @@ setup(void)
 static void
 usage(void)
 {
-	die("usage: dmenu [-bfivo] [-l lines] [-p prompt] [-fn font] [-m monitor]\n"
+	die("usage: dmenu [-bfiv] [-l lines] [-p prompt] [-fn font] [-m monitor]\n"
 	    "             [-nb color] [-nf color] [-sb color] [-sf color] [-w windowid]\n"
 	    "             [-hb color] [-hf color] [-hp items]");
 }
@@ -942,8 +942,6 @@ main(int argc, char *argv[])
 			centered = 0;
 		} else if (!strcmp(argv[i], "-f"))   /* grabs keyboard before reading stdin */
 			fast = 1;
-		else if (!strcmp(argv[i], "-o"))
-			outsideclick = 1;
 		else if (!strcmp(argv[i], "-i")) { /* case-insensitive item matching */
 			fstrncmp = strncasecmp;
 			fstrstr = cistrstr;
