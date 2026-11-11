@@ -6,39 +6,53 @@ import subprocess
 import sys
 from datetime import date
 
+
+def describe_weather(code):
+    descriptions = {
+        0: 'clear', 1: 'mostly clear', 2: 'partly cloudy', 3: 'overcast',
+        45: 'fog', 48: 'freezing fog', 51: 'light drizzle', 53: 'drizzle',
+        55: 'heavy drizzle', 56: 'freezing drizzle', 57: 'freezing drizzle',
+        61: 'light rain', 63: 'rain', 65: 'heavy rain', 66: 'freezing rain',
+        67: 'freezing rain', 71: 'light snow', 73: 'snow', 75: 'heavy snow',
+        77: 'snow grains', 80: 'light showers', 81: 'showers', 82: 'heavy showers',
+        85: 'snow showers', 86: 'heavy snow showers', 95: 'thunderstorm',
+        96: 'thunderstorm', 99: 'thunderstorm',
+    }
+    return descriptions.get(int(code), 'unknown')
+
+
 if '--forecast' in sys.argv[1:]:
     os.execlp('st', 'st', '-c', 'dwm-weather', '-t', 'weather', '-g', '80x30',
               '-e', sys.executable, os.path.abspath(__file__), '--show-forecast')
 
 if '--show-forecast' in sys.argv[1:]:
     try:
+        url = ('https://api.open-meteo.com/v1/forecast?latitude=33.1959&longitude=-117.3798'
+               '&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m'
+               '&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max'
+               '&temperature_unit=fahrenheit&wind_speed_unit=mph'
+               '&timezone=America%2FLos_Angeles&forecast_days=7')
         response = subprocess.run(
             ['curl', '--fail', '--silent', '--show-error', '--connect-timeout', '2',
-             '--max-time', '12', '--max-filesize', '262144',
-             'https://wttr.in/Oceanside?u&format=j1&lang=en'],
+             '--max-time', '12', '--max-filesize', '65536', url],
             capture_output=True, text=True, check=True, timeout=13)
         report = json.loads(response.stdout)
-        current = report['current_condition'][0]
-        area = report['nearest_area'][0]['areaName'][0]['value']
-        condition = current['weatherDesc'][0]['value']
-        print(f'{area}, california'.lower())
-        now = (f"now: {condition}, {current['temp_F']}°f "
-               f"(feels like {current['FeelsLikeF']}°f)")
-        print(now.lower())
-        print(f"humidity: {current['humidity']}%    wind: {current['winddir16Point']} {current['windspeedMiles']} mph")
-        print(f"visibility: {current['visibility']} mi    uv: {current['uvIndex']}\n")
-        print('forecast')
-        for day in report.get('weather', [])[:3]:
-            hourly = day.get('hourly', [])
-            midday = min(
-                hourly,
-                key=lambda hour: abs(int(hour.get('time', '1200')) - 1200),
-            ) if hourly else {}
-            description = midday.get('weatherDesc', [{'value': 'unknown'}])[0]['value']
-            forecast_date = date.fromisoformat(day['date']).strftime('%a %b %-d')
-            rain = midday.get('chanceofrain', '0')
-            print(f"{forecast_date:<10} {description:<22.22} "
-                  f"{day['mintempF']}–{day['maxtempF']}°f  rain {rain}%")
+        current = report['current']
+        daily = report['daily']
+        print('oceanside, california')
+        print(f"now: {describe_weather(current['weather_code'])}, "
+              f"{current['temperature_2m']:.0f}°f (feels like {current['apparent_temperature']:.0f}°f)")
+        print(f"humidity: {current['relative_humidity_2m']}%  "
+              f"wind: {current['wind_speed_10m']:.0f} mph\n")
+        print('7-day forecast')
+        for index, day in enumerate(daily['time']):
+            forecast_date = date.fromisoformat(day)
+            label = 'today' if index == 0 else forecast_date.strftime('%a %b %-d').lower()
+            condition = describe_weather(daily['weather_code'][index])
+            low = daily['temperature_2m_min'][index]
+            high = daily['temperature_2m_max'][index]
+            rain = daily['precipitation_probability_max'][index]
+            print(f'{label:<10} {condition:<18} {low:.0f}–{high:.0f}°f  rain {rain}%')
     except (OSError, subprocess.SubprocessError):
         print('could not load forecast')
     except (KeyError, IndexError, TypeError, ValueError):

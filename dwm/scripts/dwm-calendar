@@ -63,30 +63,34 @@ holiday_labels = {
 
 
 def render_month(year, month):
-    calendar.setfirstweekday(calendar.SUNDAY)
     holidays = [item for holiday_year in (year - 1, year, year + 1)
                 for item in federal_holidays(holiday_year)
                 if item[0].year == year and item[0].month == month]
     events = {holiday.day: holiday_labels[name] for holiday, name, _ in holidays}
     today = date.today()
-    width = 76
-    print(f'{calendar.month_name[month]} {year}'.center(width).lower())
-    print(' '.join(day.center(10) for day in ('su', 'mo', 'tu', 'we', 'th', 'fr', 'sa')))
-    for week in calendar.monthcalendar(year, month):
-        dates = []
-        labels = []
+    width = 34
+    border = '+' + '-' * width + '+'
+    print(border)
+    print('|' + f'{calendar.month_name[month]} {year}'.center(width).lower() + '|')
+    print(border)
+    headings = ' '.join(day.center(4) for day in ('su', 'mo', 'tu', 'we', 'th', 'fr', 'sa'))
+    print('|' + headings + '|')
+    for week in calendar.Calendar(calendar.SUNDAY).monthdayscalendar(year, month):
+        cells = []
         for day in week:
-            if day == today.day and month == today.month and year == today.year:
-                dates.append('    \033[7m' + f'{day:2}' + '\033[0m    ')
+            if day == 0:
+                cell = ''
+            elif day == today.day and month == today.month and year == today.year:
+                cell = f'[{day}]'
             else:
-                dates.append(f'{day:2}'.center(10) if day else ' ' * 10)
-            labels.append(events.get(day, '').center(10))
-        print(' '.join(dates))
-        print(' '.join(labels))
-    print('\n* us federal holidays')
+                cell = str(day) + ('*' if day in events else '')
+            cells.append(cell.center(4))
+        print('|' + ' '.join(cells) + '|')
+    print(border)
+    print('\nus federal holidays')
     for holiday, name, observed in holidays:
         suffix = ' (observed)' if observed else ''
-        print(f'{holiday:%b} {holiday.day:2}  {name}{suffix}'.lower())
+        print(f'{holiday.day:2}  {name}{suffix}'.lower())
     print('\nleft/right: previous/next month    t: today    q: close', end='', flush=True)
 
 
