@@ -127,7 +127,7 @@ if not sys.stdin.isatty():
 else:
     original = termios.tcgetattr(fd)
     try:
-        tty.setraw(fd)
+        tty.setcbreak(fd)
         while True:
             print('\033[2J\033[H', end='')
             render_month(month.year, month.month)

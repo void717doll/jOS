@@ -21,6 +21,21 @@ def describe_weather(code):
     return descriptions.get(int(code), 'unknown')
 
 
+def weather_art(code):
+    code = int(code)
+    if code == 0 or code == 1:
+        return ('        \\   /', '         .-.', '      --(   )--', "         `-'", '        /   \\')
+    if code in (45, 48):
+        return ('       _ - _', '    _ (   ) _', '      (___)')
+    if code in (51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82):
+        return ('       .--.', '    .-(    ).', '   (___.______) ', "    '  '  '  '")
+    if code in (71, 73, 75, 77, 85, 86):
+        return ('       .--.', '    .-(    ).', '   (___.______) ', '     *  *  *')
+    if code >= 95:
+        return ('       .--.', '    .-(    ).', '   (___.______) ', '      / /')
+    return ('       .--.', '    .-(    ).', '   (___.______)')
+
+
 if '--forecast' in sys.argv[1:]:
     os.execlp('st', 'st', '-c', 'dwm-weather', '-t', 'weather', '-g', '80x30',
               '-e', sys.executable, os.path.abspath(__file__), '--show-forecast')
@@ -40,7 +55,10 @@ if '--show-forecast' in sys.argv[1:]:
         current = report['current']
         daily = report['daily']
         print('oceanside, california')
-        print(f"now: {describe_weather(current['weather_code'])}, "
+        print('\ntoday')
+        for line in weather_art(current['weather_code']):
+            print(line)
+        print(f"\nnow: {describe_weather(current['weather_code'])}, "
               f"{current['temperature_2m']:.0f}°f (feels like {current['apparent_temperature']:.0f}°f)")
         print(f"humidity: {current['relative_humidity_2m']}%  "
               f"wind: {current['wind_speed_10m']:.0f} mph\n")
