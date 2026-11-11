@@ -120,7 +120,7 @@ status() {
 		battery
 		wifi=$("$bindir/dwm-wifi")
 		bluetooth=$("$bindir/dwm-bluetooth" --status)
-		printf '%s   %s %s   %s %s   %s   %s   \032%s\033   \034%s\035   \026%s %s\n' \
+		printf '%s   %s %s   %s %s   %s   %s   \032%s\033   \034%s\035   %s %s\n' \
 			"$battery_text" "$audio_icon" "$audio_text" "$light_icon" "$light_text" "$wifi" "$bluetooth" "$weather" "$notification_text" "$clock_icon" \
 			"$(date '+%m/%d/%Y %I:%M %p' | tr '[:upper:]' '[:lower:]')"
 	fi

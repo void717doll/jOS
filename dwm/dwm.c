@@ -737,20 +737,21 @@ clientmessage(XEvent *e)
 void
 configure(Client *c)
 {
-	XConfigureEvent ce;
+	XEvent event = {0};
+	XConfigureEvent *ce = &event.xconfigure;
 
-	ce.type = ConfigureNotify;
-	ce.display = dpy;
-	ce.event = c->win;
-	ce.window = c->win;
-	ce.x = c->x;
-	ce.y = c->y + titleheight(c);
-	ce.width = c->w;
-	ce.height = MAX(1, c->h - titleheight(c));
-	ce.border_width = c->bw;
-	ce.above = None;
-	ce.override_redirect = False;
-	XSendEvent(dpy, c->win, False, StructureNotifyMask, (XEvent *)&ce);
+	ce->type = ConfigureNotify;
+	ce->display = dpy;
+	ce->event = c->win;
+	ce->window = c->win;
+	ce->x = c->x;
+	ce->y = c->y + titleheight(c);
+	ce->width = c->w;
+	ce->height = MAX(1, c->h - titleheight(c));
+	ce->border_width = c->bw;
+	ce->above = None;
+	ce->override_redirect = False;
+	XSendEvent(dpy, c->win, False, StructureNotifyMask, &event);
 }
 
 void

@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
+import json
 import os
 from pathlib import Path
 import subprocess
 import sys
 import tempfile
+from datetime import date, timedelta
 
 project = Path(__file__).resolve().parents[1]
 
@@ -19,7 +21,8 @@ with tempfile.TemporaryDirectory(prefix='dwm-helpers-') as directory:
     bindir.mkdir()
     trace = root / 'trace'
     env = dict(os.environ, HOME=str(root), XDG_CONFIG_HOME=str(root / 'config'),
-               PATH=f'{bindir}:/usr/bin:/bin', TRACE=str(trace), DWM_WALLPAPER='/missing-wallpaper')
+               PATH=f'{bindir}:/usr/bin:/bin', TRACE=str(trace), DWM_WALLPAPER='/missing-wallpaper',
+               DWM_WALLS_DIR=str(root / 'Pictures/walls'))
     script(bindir / 'nmcli', r'''
 [ "${FAILED:-no}" = no ] || exit 1
 case "$*" in
@@ -75,7 +78,8 @@ printf '64 bytes from 192.0.2.1: icmp_seq=1 ttl=64 time=43.1 ms\n'
     assert wifi('--color', SIGNAL='') == '\x07\x06\x13\x05 43ms\x08\x01'
     script(bindir / 'curl', "printf '%s\\n' \"$@\" > \"$TRACE.curl\"\n" +
            '[ "${WEATHER_FAIL:-no}" = no ] || exit 28\n' +
-           "printf '%s' \"$WEATHER_RESPONSE\"\n")
+           'case "$*" in *open-meteo*) printf "%s" "$FORECAST_RESPONSE" ;; ' +
+           '*) printf "%s" "$WEATHER_RESPONSE" ;; esac\n')
 
     def weather(response, **values):
         return subprocess.check_output([project / 'scripts' / 'dwm-weather'],
@@ -97,12 +101,23 @@ printf '64 bytes from 192.0.2.1: icmp_seq=1 ttl=64 time=43.1 ms\n'
     script(bindir / 'st', 'printf "%s\\n" "$@" > "$TRACE.st"\n')
     subprocess.run([project / 'scripts' / 'dwm-weather', '--forecast'], env=env, check=True)
     assert Path(str(trace) + '.st').read_text().splitlines() == [
-        '-c', 'dwm-weather', '-t', 'weather', '-g', '80x30', '-e',
+        '-c', 'dwm-weather', '-t', 'weather', '-g', '54x20', '-e',
         sys.executable, str(project / 'scripts' / 'dwm-weather'), '--show-forecast']
+    forecast_dates = [(date.today() + timedelta(days=offset)).isoformat() for offset in range(7)]
+    forecast = {
+        'current': {'temperature_2m': 72, 'relative_humidity_2m': 55,
+                    'apparent_temperature': 73, 'weather_code': 0, 'wind_speed_10m': 5},
+        'daily': {'time': forecast_dates, 'weather_code': [0, 63, 2, 3, 45, 71, 95],
+                  'temperature_2m_max': [80, 75, 77, 72, 69, 61, 66],
+                  'temperature_2m_min': [60, 58, 59, 56, 53, 48, 51],
+                  'precipitation_probability_max': [0, 40, 10, 20, 0, 10, 80]},
+    }
     result = subprocess.run([project / 'scripts' / 'dwm-weather', '--show-forecast'],
-                            env=dict(env, WEATHER_RESPONSE='forecast text'), input='\n',
+                            env=dict(env, FORECAST_RESPONSE=json.dumps(forecast)), input='\n',
                             capture_output=True, text=True, check=True)
-    assert result.stdout == 'forecast text\npress enter to close\n'
+    assert 'now: clear, 72°f (feels like 73°f)' in result.stdout
+    assert '7-day forecast' in result.stdout and 'today      clear' in result.stdout
+    assert 'press enter to close\n' in result.stdout
     result = subprocess.run([project / 'scripts' / 'dwm-weather', '--show-forecast'],
                             env=dict(env, WEATHER_FAIL='yes'), input='\n',
                             capture_output=True, text=True, check=True)
@@ -111,39 +126,58 @@ printf '64 bytes from 192.0.2.1: icmp_seq=1 ttl=64 time=43.1 ms\n'
     script(bindir / 'st', 'printf "%s\\n" "$@" > "$TRACE"\n')
     subprocess.run([project / 'scripts' / 'dwm-calendar'], env=env, check=True)
     assert trace.read_text().splitlines() == ['-c', 'dwm-calendar', '-t', 'calendar',
-                                            '-g', '80x30', '-e', str(project / 'scripts' / 'dwm-calendar'), '--show']
+                                            '-g', '36x22', '-e', str(project / 'scripts' / 'dwm-calendar'), '--show']
     calendar = subprocess.run([project / 'scripts' / 'dwm-calendar', '--show'], input='\n',
                               capture_output=True, text=True, check=True)
-    header = calendar.stdout.splitlines()[1]
-    assert all(day in header for day in ('su', 'mo', 'tu', 'we', 'th', 'fr', 'sa'))
+    weekdays = calendar.stdout.splitlines()[3]
+    assert all(day in weekdays for day in ('su', 'mo', 'tu', 'we', 'th', 'fr', 'sa'))
     assert 'us federal holidays' in calendar.stdout
-    assert '\x1b[7m' in calendar.stdout and 'enter to close' in calendar.stdout
+    assert 'left/right: previous/next month' in calendar.stdout and 'q: close' in calendar.stdout
     fixed_calendar = bindir / 'calendar-fixed-date'
     fixed_calendar.write_text((project / 'scripts' / 'dwm-calendar').read_text().replace(
-        'today = date.today()', 'today = date(2026, 10, 1)'))
+        'today = date.today()', 'today = date(2026, 10, 1)').replace(
+        'month = date.today().replace(day=1)', 'month = date(2026, 10, 1)'))
     fixed_calendar.chmod(0o755)
     fixed = subprocess.run([fixed_calendar, '--show'], input='\n', capture_output=True,
                            text=True, check=True).stdout.splitlines()
-    assert any('columbus' in line for line in fixed[:fixed.index('* us federal holidays')])
+    holiday_start = fixed.index('us federal holidays')
+    assert any('columbus day' in line for line in fixed[holiday_start:])
 
-    wallpapers = root / 'Pictures/wallpapers'
+    wallpapers = root / 'Pictures/walls'
     (wallpapers / 'flowers').mkdir(parents=True)
     for name in ('flowers/red flower.jpg', 'blue.PNG', 'not an image.txt', 'line\nbreak.png'):
         (wallpapers / name).touch()
-    script(bindir / 'dmenu', 'cat > "$TRACE.menu"\nprintf "%s\n" "$CHOICE"\nexit "${CANCEL:-0}"\n')
+    script(bindir / 'dmenu', '''
+case "$*" in
+*'wallpaper directory:'*) cat > "$TRACE.menu-dirs"; choice=${DIR_CHOICE:-${CHOICE:-}};;
+*'wallpaper:'*) cat > "$TRACE.menu-files"; choice=${FILE_CHOICE:-${CHOICE:-}};;
+*) cat > "$TRACE.menu-other"; choice=${CHOICE:-};;
+esac
+printf '%s\n' "$choice"
+exit "${CANCEL:-0}"
+''')
     script(bindir / 'xwallpaper', '[ "${FAILED:-no}" = no ] || exit 1\nprintf "%s\n" "$@" > "$TRACE"\n')
     script(bindir / 'xsetroot', 'printf "%s\\n" "$@" > "$TRACE"\n')
     script(bindir / 'dunstify', '[ "${NOTICE_FAIL:-no}" = no ] || exit 1\nprintf "%s\\n" "$@" > "$TRACE.notice"\n')
+
+    def choose_wallpaper(directory, filename, check=True, **values):
+        return subprocess.run([project / 'scripts' / 'dwm-wallpaper'],
+                              env=dict(env, DIR_CHOICE=directory, FILE_CHOICE=filename, **values),
+                              check=check)
+
     selected = 'flowers/red flower.jpg'
-    subprocess.run([project / 'scripts' / 'dwm-wallpaper'], env=dict(env, CHOICE=selected), check=True)
+    choose_wallpaper('walls/flowers/', 'red flower.jpg')
     assert trace.read_text().splitlines() == ['--zoom', str(wallpapers / selected)]
-    assert Path(str(trace) + '.menu').read_text().splitlines() == ['[random]', 'blue.PNG', selected]
+    assert Path(str(trace) + '.menu-dirs').read_text().splitlines() == [
+        '[random directory + wallpaper]', 'walls/', 'walls/flowers/']
+    assert Path(str(trace) + '.menu-files').read_text().splitlines() == [
+        '[random wallpaper]', 'red flower.jpg']
     saved = root / 'config/dwm/wallpaper'
     assert saved.read_text() == f'{wallpapers / selected}\n'
     history = root / 'config/dwm/wallpaper.previous'
     notice = Path(str(trace) + '.notice')
     assert history.read_text() == '\n'
-    assert 'wallpaper changed' in notice.read_text()
+    assert 'wallpaper changed (red flower.jpg)' in notice.read_text()
     assert 'undo' not in notice.read_text().lower()
     for choice, cancel in (('', '1'), ('../outside.jpg', '0'), ('arbitrary text', '0')):
         trace.write_text('')
@@ -151,15 +185,15 @@ printf '64 bytes from 192.0.2.1: icmp_seq=1 ttl=64 time=43.1 ms\n'
         subprocess.run([project / 'scripts' / 'dwm-wallpaper'], env=dict(env, CHOICE=choice, CANCEL=cancel), check=True)
         assert not notice.read_text()
         assert not trace.read_text() and saved.read_text() == f'{wallpapers / selected}\n'
-    result = subprocess.run([project / 'scripts' / 'dwm-wallpaper'], env=dict(env, CHOICE='blue.PNG', FAILED='yes'))
+    result = choose_wallpaper('walls/', 'blue.PNG', check=False, FAILED='yes')
     assert result.returncode != 0 and saved.read_text() == f'{wallpapers / selected}\n'
 
 
     assert not notice.read_text(), 'failed apply sent a success notification'
     assert history.read_text() == '\n'
-    subprocess.run([project / 'scripts' / 'dwm-wallpaper'], env=dict(env, CHOICE='blue.PNG'), check=True)
+    choose_wallpaper('walls/', 'blue.PNG')
     assert history.read_text() == f'{wallpapers / selected}\n'
-    assert Path(str(trace) + '.menu').read_text().splitlines()[0] == '[undo last change]'
+    assert Path(str(trace) + '.menu-dirs').read_text().splitlines()[0] == '[undo last change]'
     subprocess.run([project / 'scripts' / 'dwm-wallpaper'], env=dict(env, CHOICE='[undo last change]'), check=True)
     assert saved.read_text() == f'{wallpapers / selected}\n'
     assert trace.read_text().splitlines() == ['--zoom', str(wallpapers / selected)]
@@ -168,23 +202,23 @@ printf '64 bytes from 192.0.2.1: icmp_seq=1 ttl=64 time=43.1 ms\n'
 
     # returning to the original solid background is also undoable.
     saved.write_text('\n')
-    subprocess.run([project / 'scripts' / 'dwm-wallpaper'], env=dict(env, CHOICE='blue.PNG', NOTICE_FAIL='yes'), check=True)
+    choose_wallpaper('walls/', 'blue.PNG', NOTICE_FAIL='yes')
     assert saved.read_text() == f'{wallpapers / "blue.PNG"}\n'
     subprocess.run([project / 'scripts' / 'dwm-wallpaper'], env=dict(env, CHOICE='[undo last change]'), check=True)
     assert trace.read_text().splitlines() == ['-solid', '#222222']
     assert saved.read_text() == '\n' and not history.exists()
 
-    subprocess.run([project / 'scripts' / 'dwm-wallpaper'], env=dict(env, CHOICE=selected), check=True)
-    subprocess.run([project / 'scripts' / 'dwm-wallpaper'], env=dict(env, CHOICE='blue.PNG'), check=True)
-    subprocess.run([project / 'scripts' / 'dwm-wallpaper'], env=dict(env, CHOICE='blue.PNG'), check=True)
+    choose_wallpaper('walls/flowers/', 'red flower.jpg')
+    choose_wallpaper('walls/', 'blue.PNG')
+    choose_wallpaper('walls/', 'blue.PNG')
     assert history.read_text() == f'{wallpapers / selected}\n', 'same selection erased undo'
-    subprocess.run([project / 'scripts' / 'dwm-wallpaper'], env=dict(env, CHOICE='[random]'), check=True)
+    subprocess.run([project / 'scripts' / 'dwm-wallpaper'], env=dict(env, CHOICE='[random directory + wallpaper]'), check=True)
     assert saved.read_text() == f'{wallpapers / selected}\n', 'random repeated the current image'
     assert history.read_text() == f'{wallpapers / "blue.PNG"}\n'
     subprocess.run([project / 'scripts' / 'dwm-wallpaper'], env=dict(env, CHOICE='[undo last change]'), check=True)
     assert saved.read_text() == f'{wallpapers / "blue.PNG"}\n'
-    subprocess.run([project / 'scripts' / 'dwm-wallpaper'], env=dict(env, CHOICE=selected), check=True)
-    subprocess.run([project / 'scripts' / 'dwm-wallpaper'], env=dict(env, CHOICE='blue.PNG'), check=True)
+    choose_wallpaper('walls/flowers/', 'red flower.jpg')
+    choose_wallpaper('walls/', 'blue.PNG')
     (wallpapers / selected).unlink()
     result = subprocess.run([project / 'scripts' / 'dwm-wallpaper'], env=dict(env, CHOICE='[undo last change]'), capture_output=True)
     assert result.returncode != 0
@@ -192,7 +226,7 @@ printf '64 bytes from 192.0.2.1: icmp_seq=1 ttl=64 time=43.1 ms\n'
     assert saved.read_text() == f'{wallpapers / "blue.PNG"}\n'
 
     trace.write_text('')
-    subprocess.run([project / 'scripts' / 'dwm-wallpaper'], env=dict(env, CHOICE='[random]'), check=True)
+    subprocess.run([project / 'scripts' / 'dwm-wallpaper'], env=dict(env, CHOICE='[random directory + wallpaper]'), check=True)
     assert not trace.read_text(), 'single-image random selection reapplied the current image'
 
 print('wifi states, latency, wallpaper random selection, notifications, undo, cancellation and failed apply: passed (commands mocked)')

@@ -21,7 +21,18 @@ static unsigned long borderrows[4096], bordercolor, frameborder;
 static int borderheight, borderdepth;
 static Window destroyedclient;
 static Window raisedwindow;
+static Window raisedwindows[256];
+static size_t raisedcount;
 static int replayedclicks;
+
+static int
+wasraised(Window window)
+{
+	for (size_t i = 0; i < raisedcount; i++)
+		if (raisedwindows[i] == window)
+			return 1;
+	return 0;
+}
 
 Status __wrap_XGetWMProtocols(Display *display, Window window, Atom **protocols, int *count) { return 0; }
 int __wrap_XMoveWindow(Display *display, Window window, int x, int y) { return 1; }
@@ -110,7 +121,13 @@ int __wrap_XSetWindowBackground(Display *display, Window window, unsigned long p
 int __wrap_XClearWindow(Display *display, Window window) { if (window == 2000) titlecleared++; return 1; }
 int __wrap_XSetWindowBorderWidth(Display *display, Window window, unsigned int width) { return 1; }
 
-int __wrap_XRaiseWindow(Display *display, Window window) { raisedwindow = window; return 1; }
+int __wrap_XRaiseWindow(Display *display, Window window)
+{
+	raisedwindow = window;
+	if (raisedcount < LENGTH(raisedwindows))
+		raisedwindows[raisedcount++] = window;
+	return 1;
+}
 int __wrap_XAllowEvents(Display *display, int mode, Time time)
 {
 	assert(mode == ReplayPointer);
@@ -968,10 +985,11 @@ main(void)
 				}
 				click.xbutton.window = c.win;
 				raisedwindow = None;
+				raisedcount = 0;
 				int replayed = replayedclicks;
 				buttonpress(&click);
 				assert(replayedclicks == replayed + 1);
-				assert(raisedwindow == c.win);
+				assert(wasraised(c.win));
 			}
 		}
 		m.lt[0] = &layouts[1];
@@ -996,10 +1014,11 @@ main(void)
 				motiony = pointery + (edge & EdgeTop ? 40 : edge & EdgeBottom ? -40 : 0);
 				mouseevent = 0;
 				XEvent click = {.xbutton = {.window = c.handles[i], .button = Button1}};
+				raisedcount = 0;
 				buttonpress(&click);
 				assert(c.w == m.ww - 2 * c.bw - (edge & (EdgeLeft|EdgeRight) ? 50 : 0));
 				assert(c.h == m.wh - 2 * c.bw - (edge & (EdgeTop|EdgeBottom) ? 40 : 0));
-				assert(dragcursor == edgecursors[i] && raisedwindow == c.win);
+				assert(dragcursor == edgecursors[i] && wasraised(c.win));
 			}
 		}
 		Client neighbour = {.mon = &m, .tags = 1, .bw = 1};
