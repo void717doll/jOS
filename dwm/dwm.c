@@ -149,6 +149,7 @@ struct Monitor {
 	unsigned int tagset[2];
 	int showbar;
 	int showdesktop;
+	int preservestack;
 	int topbar;
 	Client *clients;
 	Client *sel;
@@ -1910,7 +1911,7 @@ restack(Monitor *m)
 	}
 	for (c = m->clients; c; c = c->next)
 		updatehandles(c);
-	if (m->sel->isfloating || !m->lt[m->sellt]->arrange) {
+	if (!m->preservestack && (m->sel->isfloating || !m->lt[m->sellt]->arrange)) {
 		/* restack decorations last so focusing one float leaves it on top. */
 		if (m->sel->titlebar)
 			XRaiseWindow(dpy, m->sel->titlebar);
@@ -2459,6 +2460,7 @@ void
 unmanage(Client *c, int destroyed)
 {
 	Monitor *m = c->mon;
+	int wasfloating = c->isfloating || !m->lt[m->sellt]->arrange;
 	XWindowChanges wc;
 
 	endalttab(0);
@@ -2484,7 +2486,9 @@ unmanage(Client *c, int destroyed)
 	free(c);
 	focus(NULL);
 	updateclientlist();
+	m->preservestack = wasfloating;
 	arrange(m);
+	m->preservestack = 0;
 }
 
 void
