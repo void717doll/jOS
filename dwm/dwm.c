@@ -1886,6 +1886,23 @@ resizemouse(const Arg *arg)
 	while (XCheckMaskEvent(dpy, EnterWindowMask, &ev));
 }
 
+static void
+lowerfloating(Monitor *m)
+{
+	Client *c;
+	XWindowChanges wc = {.sibling = m->barwin, .stack_mode = Below};
+
+	for (c = m->stack; c; c = c->snext)
+		if (c->isfloating && !c->isfullscreen && ISVISIBLE(c)) {
+			if (c->titlebar) {
+				wc.sibling = c->win;
+				XConfigureWindow(dpy, c->titlebar, CWSibling|CWStackMode, &wc);
+			}
+			wc.sibling = m->barwin;
+			XConfigureWindow(dpy, c->win, CWSibling|CWStackMode, &wc);
+		}
+}
+
 void
 restack(Monitor *m)
 {
@@ -1897,6 +1914,8 @@ restack(Monitor *m)
 	if (!m->sel)
 		return;
 	if (m->lt[m->sellt]->arrange) {
+		if (!m->preservestack)
+			lowerfloating(m);
 		wc.stack_mode = Below;
 		wc.sibling = m->barwin;
 		for (c = m->stack; c; c = c->snext)

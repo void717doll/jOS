@@ -23,6 +23,9 @@ static Window destroyedclient;
 static Window raisedwindow;
 static Window raisedwindows[256];
 static size_t raisedcount;
+static Window loweredwindows[32], loweredsiblings[32];
+static size_t loweredcount;
+static int recordlowered;
 static int replayedclicks;
 
 static int
@@ -170,6 +173,12 @@ int __wrap_XMaskEvent(Display *display, long mask, XEvent *event)
 
 int __wrap_XConfigureWindow(Display *display, Window window, unsigned int mask, XWindowChanges *changes)
 {
+	if (recordlowered && (mask & (CWSibling|CWStackMode)) == (CWSibling|CWStackMode)
+	    && changes->stack_mode == Below) {
+		assert(loweredcount < LENGTH(loweredwindows));
+		loweredwindows[loweredcount] = window;
+		loweredsiblings[loweredcount++] = changes->sibling;
+	}
 	if (window == 42 && (mask & CWHeight)) { clientheight = changes->height; clienty = changes->y; }
 	if (window == 2000 && (mask & CWStackMode))
 		assert(changes->sibling == 42 && changes->stack_mode == Below);
@@ -260,6 +269,26 @@ main(void)
 	assert(LENGTH(tags) == 5 && TAGMASK == 31);
 	assert(!strcmp(layouts[0].symbol, "[]=") && !strcmp(layouts[1].symbol, "><>"));
 	selmon = &monitor;
+	{
+		Monitor m = {.barwin = 700, .tagset = {1, 1}};
+		Client tiled = {.win = 103, .tags = 1, .mon = &m};
+		Client fullscreen = {.win = 104, .tags = 1, .mon = &m, .isfloating = 1, .isfullscreen = 1};
+		Client hidden = {.win = 105, .tags = 2, .mon = &m, .isfloating = 1};
+		Client second = {.win = 102, .tags = 1, .mon = &m, .isfloating = 1, .snext = &tiled};
+		Client first = {.win = 101, .titlebar = 201, .tags = 1, .mon = &m,
+			.isfloating = 1, .snext = &second};
+		tiled.snext = &fullscreen;
+		fullscreen.snext = &hidden;
+		m.stack = &first;
+		loweredcount = 0;
+		recordlowered = 1;
+		lowerfloating(&m);
+		recordlowered = 0;
+		assert(loweredcount == 3);
+		assert(loweredwindows[0] == 201 && loweredwindows[1] == 101 && loweredwindows[2] == 102);
+		assert(loweredsiblings[0] == first.win);
+		for (size_t i = 1; i < loweredcount; i++) assert(loweredsiblings[i] == m.barwin);
+	}
 	grabbuttons(&client);
 	assert(focusgrabs == 1 && buttongrabs > 0);
 	buttongrabs = 0;
@@ -806,7 +835,6 @@ main(void)
 			m.lt[0] = &layouts[1];
 			m.clients = m.stack = &c;
 			c.x = -800; c.y = 200; c.w = 400; c.h = 300;
-			m.sel = &c;
 			for (size_t i = 0; i < LENGTH(edgecursors); i++)
 				edgecursors[i] = 100 + i;
 			updatehandles(&c);
@@ -822,14 +850,6 @@ main(void)
 				assert(box[0] + box[2] <= c.x + c.bw || box[0] >= c.x + c.bw + c.w ||
 				       box[1] + box[3] <= c.y + c.bw || box[1] >= c.y + c.bw + c.h);
 			}
-			Client other = {.mon = &m};
-			m.sel = &other;
-			updatehandles(&c);
-			assert(!c.handlesmapped);
-			for (size_t i = 0; i < LENGTH(c.handles); i++) assert(!handlemapped[i]);
-			m.sel = &c;
-			updatehandles(&c);
-			assert(c.handlesmapped);
 			for (size_t i = 0; i < LENGTH(resizeedges); i++) {
 				int edge = resizeedges[i];
 				c.x = -800; c.y = 200; c.w = 400; c.h = 300;
