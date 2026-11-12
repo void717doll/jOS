@@ -548,6 +548,8 @@ updatehandles(Client *c)
 	if (!c->win)
 		return;
 	floating = !c->isfullscreen && (c->isfloating || !c->mon->lt[c->mon->sellt]->arrange);
+	if (floating && c != c->mon->sel)
+		floating = 0;
 	edges = floating ? EdgeLeft|EdgeRight|EdgeTop|EdgeBottom :
 		(c->mon->lt[c->mon->sellt]->arrange == tile || c->mon->lt[c->mon->sellt]->arrange == bsptile)
 		? c->tileedges : 0;

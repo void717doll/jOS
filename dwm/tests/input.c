@@ -806,6 +806,7 @@ main(void)
 			m.lt[0] = &layouts[1];
 			m.clients = m.stack = &c;
 			c.x = -800; c.y = 200; c.w = 400; c.h = 300;
+			m.sel = &c;
 			for (size_t i = 0; i < LENGTH(edgecursors); i++)
 				edgecursors[i] = 100 + i;
 			updatehandles(&c);
@@ -821,6 +822,14 @@ main(void)
 				assert(box[0] + box[2] <= c.x + c.bw || box[0] >= c.x + c.bw + c.w ||
 				       box[1] + box[3] <= c.y + c.bw || box[1] >= c.y + c.bw + c.h);
 			}
+			Client other = {.mon = &m};
+			m.sel = &other;
+			updatehandles(&c);
+			assert(!c.handlesmapped);
+			for (size_t i = 0; i < LENGTH(c.handles); i++) assert(!handlemapped[i]);
+			m.sel = &c;
+			updatehandles(&c);
+			assert(c.handlesmapped);
 			for (size_t i = 0; i < LENGTH(resizeedges); i++) {
 				int edge = resizeedges[i];
 				c.x = -800; c.y = 200; c.w = 400; c.h = 300;
