@@ -1929,8 +1929,6 @@ restack(Monitor *m)
 			XRaiseWindow(dpy, m->sel->win);
 		}
 	}
-	for (c = m->clients; c; c = c->next)
-		updatehandles(c);
 	if (!m->preservestack && (m->sel->isfloating || !m->lt[m->sellt]->arrange)) {
 		/* restack decorations last so focusing one float leaves it on top. */
 		if (m->sel->titlebar)
