@@ -1741,7 +1741,8 @@ visibility(XEvent *ev)
 {
 	XVisibilityEvent *e = &ev->xvisibility;
 
-	MODBIT(win.mode, e->state != VisibilityFullyObscured, MODE_VISIBLE);
+	if (setvisible(&win.mode, e->state != VisibilityFullyObscured))
+		redraw();
 }
 
 void

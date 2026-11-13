@@ -37,6 +37,9 @@ check: all
 	$(CC) $(STCPPFLAGS) $(CPPFLAGS) $(CFLAGS) -g -fsanitize=address,undefined \
 	-ffunction-sections -fdata-sections tests/features.c -Wl,--gc-sections -o "$$check_binary" && PATH="$(CURDIR):$$PATH" "$$check_binary"
 	@check_binary=$$(mktemp); trap 'rm -f "$$check_binary"' EXIT HUP INT TERM; \
+	$(CC) $(STCPPFLAGS) $(CPPFLAGS) $(CFLAGS) -g -fsanitize=address,undefined \
+	-ffunction-sections -fdata-sections tests/visibility.c -o "$$check_binary" && "$$check_binary"
+	@check_binary=$$(mktemp); trap 'rm -f "$$check_binary"' EXIT HUP INT TERM; \
 	$(CC) $(STCFLAGS) -g -fsanitize=address,undefined -ffunction-sections -fdata-sections \
 	tests/drop.c st.c -Wl,--gc-sections $(STLDFLAGS) -o "$$check_binary" \
 	-Wl,--wrap=XSendEvent,--wrap=XFlush,--wrap=XDeleteProperty,--wrap=XConvertSelection \

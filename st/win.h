@@ -23,6 +23,18 @@ enum win_mode {
 	                  |MODE_MOUSEMANY,
 };
 
+static int
+setvisible(int *mode, int visible)
+{
+	int wasvisible = *mode & MODE_VISIBLE;
+
+	if (visible)
+		*mode |= MODE_VISIBLE;
+	else
+		*mode &= ~MODE_VISIBLE;
+	return visible && !wasvisible;
+}
+
 void xbell(void);
 void xclipcopy(void);
 void xdrawcursor(int, int, Glyph, int, int, Glyph);
