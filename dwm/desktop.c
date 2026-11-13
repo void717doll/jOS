@@ -58,6 +58,9 @@ drawtitlebar(Client *c)
 	if (!titles || !c->titlebar || !c->titlemapped || c->isfullscreen)
 		return;
 	selected = c->mon == selmon && c == selmon->sel;
+	if (c->titlecached && c->titlecacheheight == c->h && c->titlecachebw == c->bw
+	    && c->titlecachedepth == c->depth && c->titlecacheselected == selected)
+		return;
 	XSetWindowBorder(dpy, c->titlebar, titlescheme[selected][ColBorder].pixel);
 	if (c->bw) {
 		height = MAX(1, c->h - titleheight(c)) + 2 * c->bw;
@@ -76,6 +79,11 @@ drawtitlebar(Client *c)
 	/* stacked windows use tabbed's labels; ordinary frames stay blank. */
 	XSetWindowBackground(dpy, c->titlebar, titlescheme[selected][ColBg].pixel);
 	XClearWindow(dpy, c->titlebar);
+	c->titlecacheheight = c->h;
+	c->titlecachebw = c->bw;
+	c->titlecachedepth = c->depth;
+	c->titlecacheselected = selected;
+	c->titlecached = 1;
 }
 
 static void
@@ -94,8 +102,10 @@ updatetitlebar(Client *c)
 	XSetWindowBorderWidth(dpy, c->titlebar, c->bw);
 	XMoveResizeWindow(dpy, c->titlebar, c->x, c->y, c->w, c->h);
 	XConfigureWindow(dpy, c->titlebar, CWSibling|CWStackMode, &stack);
-	if (!c->titlemapped)
+	if (!c->titlemapped) {
+		c->titlecached = 0;
 		XMapWindow(dpy, c->titlebar);
+	}
 	c->titlemapped = 1;
 	drawtitlebar(c);
 }

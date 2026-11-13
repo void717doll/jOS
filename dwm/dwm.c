@@ -118,6 +118,7 @@ struct Client {
 	Monitor *mon;
 	Window win, titlebar;
 	int titlemapped, frameextent;
+	int titlecached, titlecacheheight, titlecachebw, titlecachedepth, titlecacheselected;
 	Window handles[8];
 	int handlesmapped;
 	unsigned int handlemask;
@@ -1117,8 +1118,10 @@ expose(XEvent *e)
 
 	Client *c;
 	if ((c = titleclient(ev->window))) {
-		if (ev->count == 0)
+		if (ev->count == 0) {
+			c->titlecached = 0;
 			drawtitlebar(c);
+		}
 		return;
 	}
 	if (tabwin && ev->window == tabwin) {

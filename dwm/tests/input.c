@@ -16,6 +16,7 @@ static int handlecount, handledestroyed, handleboxes[8][4], handlemapped[8];
 static Cursor dragcursor;
 static int titlebox[4], titlemapped, clientx, clienty, clientheight;
 static int titlecleared, releasex, releasey;
+static int titlepixmaps;
 static int buttongrabs, focusgrabs;
 static unsigned long borderrows[4096], bordercolor, frameborder;
 static int borderheight, borderdepth;
@@ -44,6 +45,7 @@ Pixmap __wrap_XCreatePixmap(Display *display, Drawable drawable, unsigned int w,
 {
 	assert(!destroyedclient || drawable != destroyedclient);
 	assert(w == 1 && h > 0 && h <= LENGTH(borderrows));
+	titlepixmaps++;
 	borderheight = h;
 	borderdepth = depth;
 	return 3000;
@@ -941,19 +943,29 @@ main(void)
 		for (int floating = 0; floating <= 1; floating++) {
 			m.lt[0] = &layouts[floating];
 			for (int selected = 0; selected <= 1; selected++) {
+				int before = titlepixmaps;
 				m.sel = selected ? &c : NULL;
 				c.depth = selected ? 32 : 24;
 				drawtitlebar(&c);
+				assert(titlepixmaps == before + 1);
 				/* the server can destroy a client before its event is handled. */
 				destroyedclient = c.win;
+				c.titlecached = 0;
 				drawtitlebar(&c);
 				destroyedclient = None;
+				assert(titlepixmaps == before + 2);
 				assert(frameborder == 44 && borderdepth == c.depth);
 				assert(borderheight == 202 && borderrows[201] == 22);
 				for (int y = 0; y <= 200; y++)
 					assert(borderrows[y] == (selected ? 88 : 66));
 			}
 		}
+		int before = titlepixmaps;
+		XEvent repaint = {.xexpose = {.window = c.titlebar, .count = 0}};
+		expose(&repaint);
+		assert(titlepixmaps == before + 1);
+		drawtitlebar(&c);
+		assert(titlepixmaps == before + 1);
 		handlecount = 0;
 		for (size_t layout = 0; layout < LENGTH(layouts); layout++) {
 			m.lt[0] = &layouts[layout];
