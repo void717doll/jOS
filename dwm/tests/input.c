@@ -936,7 +936,7 @@ main(void)
 		assert(titleclient(2000) == &c && titleclient(0) == NULL);
 		resizeclient(&c, 10, 20, 300, 232);
 		assert(titlemapped && c.titlemapped);
-		assert(titlebox[0] == 10 && titlebox[1] == 20 && titlebox[2] == 300 && titlebox[3] == 232);
+		assert(titlebox[0] == 10 && titlebox[1] == 20 && titlebox[2] == 300 && titlebox[3] == 30);
 		assert(clienty == 52 && clientheight == 200);
 		assert(tab_event.xconfigure.y == 52 && tab_event.xconfigure.height == 200);
 		assert(titlecleared && !rendered[0]);

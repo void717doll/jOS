@@ -42,7 +42,7 @@ createtitlebar(Client *c)
 	if (tabbed)
 		return;
 	/* berry keeps a separate decoration window behind the application. */
-	c->titlebar = XCreateWindow(dpy, root, c->x, c->y, MAX(1, c->w), MAX(1, c->h),
+	c->titlebar = XCreateWindow(dpy, root, c->x, c->y, MAX(1, c->w), titlebarheight,
 		c->bw, DefaultDepth(dpy, screen), CopyFromParent, DefaultVisual(dpy, screen),
 		CWOverrideRedirect|CWEventMask|CWBackPixel, &attributes);
 	XDefineCursor(dpy, c->titlebar, cursor[CurNormal]->cursor);
@@ -70,14 +70,14 @@ drawtitlebar(Client *c)
 		XSetForeground(dpy, gc, scheme[selected ? SchemeSel : SchemeNorm][ColBorder].pixel);
 		XFillRectangle(dpy, border, gc, 0, 0, 1, height);
 		/* the top border is at negative y and wraps to the tile's last rows. */
-		XSetForeground(dpy, gc, titlescheme[1][ColBg].pixel);
+		XSetForeground(dpy, gc, titlescheme[selected][ColBg].pixel);
 		XFillRectangle(dpy, border, gc, 0, height - c->bw, 1, c->bw);
 		XSetWindowBorderPixmap(dpy, c->win, border);
 		XFreeGC(dpy, gc);
 		XFreePixmap(dpy, border);
 	}
 	/* stacked windows use tabbed's labels; ordinary frames stay blank. */
-	XSetWindowBackground(dpy, c->titlebar, titlescheme[1][ColBg].pixel);
+	XSetWindowBackground(dpy, c->titlebar, titlescheme[selected][ColBg].pixel);
 	XClearWindow(dpy, c->titlebar);
 	c->titlecacheheight = c->h;
 	c->titlecachebw = c->bw;
@@ -100,7 +100,7 @@ updatetitlebar(Client *c)
 		return;
 	}
 	XSetWindowBorderWidth(dpy, c->titlebar, c->bw);
-	XMoveResizeWindow(dpy, c->titlebar, c->x, c->y, c->w, c->h);
+	XMoveResizeWindow(dpy, c->titlebar, c->x, c->y, c->w, titlebarheight);
 	XConfigureWindow(dpy, c->titlebar, CWSibling|CWStackMode, &stack);
 	if (!c->titlemapped) {
 		c->titlecached = 0;
