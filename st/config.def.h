@@ -25,7 +25,7 @@ static unsigned int cursorthickness = 2;
 static int bellvolume = 0;
 char *termname = "st-256color";
 unsigned int tabspaces = 8;
-float alpha = 0.8;
+float alpha = 1.0;
 
 /* default colors if xresources isn't loaded, you can change these. */
 static const char *colorname[] = {
