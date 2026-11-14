@@ -954,7 +954,7 @@ main(void)
 				drawtitlebar(&c);
 				destroyedclient = None;
 				assert(titlepixmaps == before + 2);
-				assert(frameborder == 44 && borderdepth == c.depth);
+				assert(frameborder == 22 && borderdepth == c.depth);
 				assert(borderheight == 202 && borderrows[201] == 22);
 				for (int y = 0; y <= 200; y++)
 					assert(borderrows[y] == (selected ? 88 : 66));

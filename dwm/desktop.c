@@ -61,7 +61,7 @@ drawtitlebar(Client *c)
 	if (c->titlecached && c->titlecacheheight == c->h && c->titlecachebw == c->bw
 	    && c->titlecachedepth == c->depth && c->titlecacheselected == selected)
 		return;
-	XSetWindowBorder(dpy, c->titlebar, titlescheme[selected][ColBorder].pixel);
+	XSetWindowBorder(dpy, c->titlebar, titlescheme[selected][ColBg].pixel);
 	if (c->bw) {
 		height = MAX(1, c->h - titleheight(c)) + 2 * c->bw;
 		/* the client may already be gone while DestroyNotify is still queued. */
