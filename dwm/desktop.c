@@ -70,14 +70,14 @@ drawtitlebar(Client *c)
 		XSetForeground(dpy, gc, scheme[selected ? SchemeSel : SchemeNorm][ColBorder].pixel);
 		XFillRectangle(dpy, border, gc, 0, 0, 1, height);
 		/* the top border is at negative y and wraps to the tile's last rows. */
-		XSetForeground(dpy, gc, titlescheme[selected][ColBg].pixel);
+		XSetForeground(dpy, gc, titlescheme[1][ColBg].pixel);
 		XFillRectangle(dpy, border, gc, 0, height - c->bw, 1, c->bw);
 		XSetWindowBorderPixmap(dpy, c->win, border);
 		XFreeGC(dpy, gc);
 		XFreePixmap(dpy, border);
 	}
 	/* stacked windows use tabbed's labels; ordinary frames stay blank. */
-	XSetWindowBackground(dpy, c->titlebar, titlescheme[selected][ColBg].pixel);
+	XSetWindowBackground(dpy, c->titlebar, titlescheme[1][ColBg].pixel);
 	XClearWindow(dpy, c->titlebar);
 	c->titlecacheheight = c->h;
 	c->titlecachebw = c->bw;
