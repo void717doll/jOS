@@ -1914,7 +1914,7 @@ restack(Monitor *m)
 	if (!m->sel)
 		return;
 	if (m->lt[m->sellt]->arrange) {
-		if (!m->preservestack)
+		if (!m->preservestack && !m->sel->isfloating)
 			lowerfloating(m);
 		wc.stack_mode = Below;
 		wc.sibling = m->barwin;
