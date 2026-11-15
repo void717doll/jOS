@@ -22,16 +22,6 @@ titleclient(Window window)
 }
 
 static void
-setclientborder(Client *c, unsigned long pixel)
-{
-	if (titles && c->titlebar && c->titlemapped && c->bw) {
-		c->titlecached = 0;
-		return;
-	}
-	XSetWindowBorder(dpy, c->win, pixel);
-}
-
-static void
 createtitlebar(Client *c)
 {
 	XClassHint hint = {0};
@@ -52,7 +42,7 @@ createtitlebar(Client *c)
 	if (tabbed)
 		return;
 	/* berry keeps a separate decoration window behind the application. */
-	c->titlebar = XCreateWindow(dpy, root, c->x, c->y, MAX(1, c->w), titlebarheight,
+	c->titlebar = XCreateWindow(dpy, root, c->x, c->y, MAX(1, c->w), MAX(1, c->h),
 		c->bw, DefaultDepth(dpy, screen), CopyFromParent, DefaultVisual(dpy, screen),
 		CWOverrideRedirect|CWEventMask|CWBackPixel, &attributes);
 	XDefineCursor(dpy, c->titlebar, cursor[CurNormal]->cursor);
@@ -68,10 +58,7 @@ drawtitlebar(Client *c)
 	if (!titles || !c->titlebar || !c->titlemapped || c->isfullscreen)
 		return;
 	selected = c->mon == selmon && c == selmon->sel;
-	if (c->titlecached && c->titlecacheheight == c->h && c->titlecachebw == c->bw
-	    && c->titlecachedepth == c->depth && c->titlecacheselected == selected)
-		return;
-	XSetWindowBorder(dpy, c->titlebar, titlescheme[selected][ColBg].pixel);
+	XSetWindowBorder(dpy, c->titlebar, titlescheme[selected][ColBorder].pixel);
 	if (c->bw) {
 		height = MAX(1, c->h - titleheight(c)) + 2 * c->bw;
 		/* the client may already be gone while DestroyNotify is still queued. */
@@ -89,11 +76,6 @@ drawtitlebar(Client *c)
 	/* stacked windows use tabbed's labels; ordinary frames stay blank. */
 	XSetWindowBackground(dpy, c->titlebar, titlescheme[selected][ColBg].pixel);
 	XClearWindow(dpy, c->titlebar);
-	c->titlecacheheight = c->h;
-	c->titlecachebw = c->bw;
-	c->titlecachedepth = c->depth;
-	c->titlecacheselected = selected;
-	c->titlecached = 1;
 }
 
 static void
@@ -110,12 +92,10 @@ updatetitlebar(Client *c)
 		return;
 	}
 	XSetWindowBorderWidth(dpy, c->titlebar, c->bw);
-	XMoveResizeWindow(dpy, c->titlebar, c->x, c->y, c->w, titlebarheight);
+	XMoveResizeWindow(dpy, c->titlebar, c->x, c->y, c->w, c->h);
 	XConfigureWindow(dpy, c->titlebar, CWSibling|CWStackMode, &stack);
-	if (!c->titlemapped) {
-		c->titlecached = 0;
+	if (!c->titlemapped)
 		XMapWindow(dpy, c->titlebar);
-	}
 	c->titlemapped = 1;
 	drawtitlebar(c);
 }
@@ -130,7 +110,7 @@ toggletitles(const Arg *arg)
 	for (m = mons; m; m = m->next)
 		for (c = m->clients; c; c = c->next) {
 			c->h = MAX(c->h, titleheight(c) + 1);
-			setclientborder(c,
+			XSetWindowBorder(dpy, c->win,
 				scheme[c == selmon->sel ? SchemeSel : SchemeNorm][ColBorder].pixel);
 			updatehandles(c);
 			XMoveResizeWindow(dpy, c->win, ISVISIBLE(c) ? c->x : -2 * WIDTH(c),
