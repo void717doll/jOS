@@ -179,6 +179,7 @@ static int titleheight(Client *c);
 static Client *titleclient(Window w);
 static void createtitlebar(Client *c);
 static void drawtitlebar(Client *c);
+static void setclientborder(Client *c, unsigned long pixel);
 static void updatetitlebar(Client *c);
 static void toggletitles(const Arg *arg);
 static void initsystray(void);
@@ -1147,7 +1148,7 @@ focus(Client *c)
 		detachstack(c);
 		attachstack(c);
 		grabbuttons(c);
-		XSetWindowBorder(dpy, c->win, scheme[SchemeSel][ColBorder].pixel);
+		setclientborder(c, scheme[SchemeSel][ColBorder].pixel);
 		setfocus(c);
 	} else {
 		XSetInputFocus(dpy, root, RevertToPointerRoot, CurrentTime);
@@ -1458,7 +1459,7 @@ manage(Window w, XWindowAttributes *wa)
 
 	wc.border_width = c->bw;
 	XConfigureWindow(dpy, w, CWBorderWidth, &wc);
-	XSetWindowBorder(dpy, w, scheme[SchemeNorm][ColBorder].pixel);
+	setclientborder(c, scheme[SchemeNorm][ColBorder].pixel);
 	configure(c); /* propagates border_width, if size doesn't change */
 	updatewindowtype(c);
 	updatesizehints(c);
@@ -2470,7 +2471,7 @@ unfocus(Client *c, int setfocus)
 	if (!c)
 		return;
 	grabbuttons(c);
-	XSetWindowBorder(dpy, c->win, scheme[SchemeNorm][ColBorder].pixel);
+	setclientborder(c, scheme[SchemeNorm][ColBorder].pixel);
 	if (setfocus) {
 		XSetInputFocus(dpy, root, RevertToPointerRoot, CurrentTime);
 		XDeleteProperty(dpy, root, netatom[NetActiveWindow]);
@@ -3061,7 +3062,7 @@ update_scheme(void)
 	}
 	for (m = mons; m; m = m->next)
 		if (m->sel)
-			XSetWindowBorder(dpy, m->sel->win, scheme[m == selmon ? SchemeSel : SchemeNorm][ColBorder].pixel);
+			setclientborder(m->sel, scheme[m == selmon ? SchemeSel : SchemeNorm][ColBorder].pixel);
 	drawbars();
 }
 

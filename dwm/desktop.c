@@ -22,6 +22,16 @@ titleclient(Window window)
 }
 
 static void
+setclientborder(Client *c, unsigned long pixel)
+{
+	if (titles && c->titlebar && c->titlemapped && c->bw) {
+		c->titlecached = 0;
+		return;
+	}
+	XSetWindowBorder(dpy, c->win, pixel);
+}
+
+static void
 createtitlebar(Client *c)
 {
 	XClassHint hint = {0};
@@ -120,7 +130,7 @@ toggletitles(const Arg *arg)
 	for (m = mons; m; m = m->next)
 		for (c = m->clients; c; c = c->next) {
 			c->h = MAX(c->h, titleheight(c) + 1);
-			XSetWindowBorder(dpy, c->win,
+			setclientborder(c,
 				scheme[c == selmon->sel ? SchemeSel : SchemeNorm][ColBorder].pixel);
 			updatehandles(c);
 			XMoveResizeWindow(dpy, c->win, ISVISIBLE(c) ? c->x : -2 * WIDTH(c),
