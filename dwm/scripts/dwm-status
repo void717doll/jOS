@@ -204,7 +204,7 @@ check_battery() (
 				flags=$((flags | 3))
 			fi
 		elif [ "$state" = Discharging ] && [ "$capacity" -le 20 ]; then
-			if [ "$((flags & 1))" = 0 ] && battery_notice normal 8000 low 'battery low'; then
+			if [ "$((flags & 1))" = 0 ] && battery_notice normal 0 low 'battery low'; then
 				flags=$((flags | 1))
 			fi
 		elif [ "$state" = Full ] || { [ "$capacity" -ge 100 ] && [ "$state" != Discharging ]; }; then
