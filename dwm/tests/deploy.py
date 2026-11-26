@@ -20,6 +20,10 @@ with tempfile.TemporaryDirectory(prefix='dwm-deploy-') as directory:
     sudo = bindir / 'sudo'
     sudo.write_text('#!/bin/sh\nprintf "%s\\n" "$*" >> "$TRACE"\n')
     sudo.chmod(0o755)
+    git = bindir / 'git'
+    git.write_text('#!/bin/sh\nset -eu\nprintf "%s\\n" "$*" >> "$TRACE"\n'
+                   'mkdir "$5"\ntouch "$5/ss"\n')
+    git.chmod(0o755)
     env = dict(os.environ, PATH=f'{bindir}:{os.environ["PATH"]}', PREFIX=str(prefix), TRACE=str(trace))
     subprocess.run([project / 'scripts/deploy.sh', '--session'], env=env,
                    check=True, capture_output=True, text=True, timeout=30)
@@ -31,6 +35,9 @@ with tempfile.TemporaryDirectory(prefix='dwm-deploy-') as directory:
     assert 'DesktopNames=dwm\n' in desktop
 
     calls = trace.read_text().splitlines()
+    assert calls[0].startswith('clone --depth 1 https://github.com/void717doll/bin ')
+    assert calls[1] == 'make install'
+    assert not Path(calls[0].split()[-1]).parent.exists()
     remove = next(call for call in calls if call.startswith('rm -f '))
     for name in ('dwm.desktop', 'dwm-local.desktop', 'jwm.desktop',
                  'jwm-local.desktop', 'jvm.desktop', 'jvm-local.desktop'):

@@ -17,6 +17,7 @@ while [ "$#" -gt 0 ]; do
 	--help)
 		printf 'usage: ./deploy.sh [--deps] [--session] [--lock] [--fonts]\n\n'
 		printf 'build and install the jOS desktop bundle to PREFIX (default: ~/.local).\n'
+		printf 'normal installs also install the bin capture helpers using sudo.\n'
 		printf '  --deps     install debian, ubuntu, or arch dependencies using sudo\n'
 		printf '  --session  add jOS to the system x11 session menu using sudo\n'
 		printf '  --fonts    download and install the ttf-all-the-icons font collection\n'
@@ -28,7 +29,7 @@ while [ "$#" -gt 0 ]; do
 	shift
 done
 if [ -n "${DESTDIR:-}" ] && { [ "$dependencies" = true ] || [ "$session" = true ] || [ "$locker" = true ]; }; then
-	printf 'jOS: staging cannot change system packages, login sessions or ~/bin\n' >&2
+	printf 'jOS: staging cannot change system packages, login sessions or the screen locker\n' >&2
 	exit 1
 fi
 if [ "$(id -u)" = 0 ]; then
@@ -50,20 +51,20 @@ if [ "$dependencies" = true ]; then
 	case "$ID ${ID_LIKE:-}" in
 	*debian*|*ubuntu*)
 		sudo apt-get update
-		sudo apt-get install -y build-essential pkg-config ncurses-bin libx11-dev libxinerama-dev libxft-dev \
+		sudo apt-get install -y git build-essential pkg-config ncurses-bin libx11-dev libxinerama-dev libxft-dev \
 			libxrandr-dev libxext-dev libcrypt-dev perl python3 xdg-utils \
 			libfontconfig1-dev libxrender-dev bash util-linux udev udisks2 libglib2.0-bin dbus-x11 dunst picom redshift xwallpaper \
 			x11-utils x11-xserver-utils xinput xinit xserver-xorg-core fonts-dejavu-core fontconfig \
 			network-manager bluez lxpolkit iputils-ping \
-			pulseaudio-utils sound-theme-freedesktop brightnessctl copyq xss-lock flameshot xclip wmctrl curl unicode-data \
+			pulseaudio-utils sound-theme-freedesktop brightnessctl copyq xss-lock flameshot ffmpeg slop xclip wmctrl curl unicode-data \
 			dolphin gimp nextcloud-desktop gnome-keyring libpam-gnome-keyring
 		;;
 	*arch*)
-		sudo pacman -S --needed --noconfirm base-devel pkgconf ncurses libx11 libxinerama libxft libxrandr libxext \
+		sudo pacman -S --needed --noconfirm git base-devel pkgconf ncurses libx11 libxinerama libxft libxrandr libxext \
 			libxrender libxcrypt fontconfig freetype2 perl python xdg-utils bash util-linux systemd udisks2 glib2 dbus \
 			dunst picom redshift xwallpaper xorg-xrandr xorg-xsetroot xorg-xset xorg-xinput xorg-xinit xorg-server \
 			ttf-dejavu networkmanager bluez lxsession iputils libpulse sound-theme-freedesktop brightnessctl copyq xss-lock flameshot \
-			xclip wmctrl curl unicode-character-database dolphin gimp nextcloud-client gnome-keyring
+			ffmpeg slop xclip wmctrl curl unicode-character-database dolphin gimp nextcloud-client gnome-keyring
 		;;
 	*) printf 'jOS: --deps supports debian, ubuntu, and arch\n' >&2; exit 1 ;;
 	esac
@@ -71,6 +72,18 @@ if [ "$dependencies" = true ]; then
 		sudo systemctl enable --now NetworkManager.service
 		sudo systemctl enable --now bluetooth.service
 	fi
+fi
+if [ -z "${DESTDIR:-}" ]; then
+	bin_checkout=$(mktemp -d)
+	trap 'rm -rf -- "$bin_checkout"' EXIT
+	trap 'exit 1' HUP INT TERM
+	git clone --depth 1 https://github.com/void717doll/bin "$bin_checkout/bin"
+	(
+		cd "$bin_checkout/bin"
+		# older ss versions pass gui options to the config subcommand.
+		sed -i 's/^flameshot config --showgelp false  gui /flameshot gui /' ss
+		sudo make install
+	)
 fi
 if [ "$fonts" = true ]; then
 	PREFIX="$prefix" DESTDIR="${DESTDIR:-}" "$script_dir/install-fonts.sh"

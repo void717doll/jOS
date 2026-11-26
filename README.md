@@ -3,7 +3,7 @@
 a small x11 desktop bundle. cherry is the nickname for dwm's `[]=` tiling
 mode; berry is the nickname for its `><>` floating mode. it includes five
 workspaces, a launcher, terminal, grouped windows, and a screen locker. wifi,
-bluetooth, weather, and the calendar are on the bar. screenshots open flameshot.
+bluetooth, weather, and the calendar are on the bar.
 dunst handles notifications, and redshift warms the display overnight. their
 configs are bundled in `dwm/dunstrc` and `dwm/redshift.conf`.
 while an MPRIS player is playing, jOS pauses idle locking and blanking; after
@@ -25,7 +25,9 @@ exec "$HOME/.local/bin/dwm-session"
 ```
 
 install updates with `./deploy.sh`. the default prefix is `~/.local`; set
-`PREFIX` to change it. use `DESTDIR` to stage a package. run
+`PREFIX` to change it. deploy also clones [bin](https://github.com/void717doll/bin)
+and runs `sudo make install` to install capture helpers in `/usr/local/bin`.
+use `DESTDIR` to stage a package without installing the helpers. run
 `./deploy.sh --help` for options.
 
 ## tools
@@ -59,7 +61,8 @@ settings live in the source configs. user settings and session state go under
 | `super` + `shift` + `1`–`5` | move window to workspace |
 | `super` + `n` / `super` + `shift` + `n` | wifi / bluetooth menu |
 | `super` + `l` | lock screen |
-| `super` + `shift` + `y` | take screenshot with flameshot |
+| `super` + `shift` + `y` | take a screenshot with `ss` |
+| `super` + `shift` + `r` | start or stop recording with `rec` |
 
 grouped windows use tabbed controls: `ctrl` + `tab` switches tabs,
 `ctrl` + `shift` + `tab` switches backwards, and `ctrl` + `shift` + `w`

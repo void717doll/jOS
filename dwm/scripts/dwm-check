@@ -11,9 +11,11 @@ check() {
 		missing=1
 	fi
 }
-for app in st firefox code dolphin keepassxc discord spotify col rec; do
+for app in st firefox code dolphin keepassxc discord spotify col; do
 	check "$app" 'configured app shortcut'
 done
+check /usr/local/bin/ss 'screenshot helper; run ./deploy.sh'
+check /usr/local/bin/rec 'recording helper; run ./deploy.sh'
 for family in FontAwesome 'Material Icons'; do
 	if ! fc-list : family 2>/dev/null | grep -Fxq "$family"; then
 		printf 'missing: %s (ttf-all-the-icons; run ./deploy.sh --fonts)\n' "$family"
