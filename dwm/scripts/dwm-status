@@ -110,7 +110,7 @@ status() {
 	notification_text=''
 	[ "$notifications" -eq 0 ] || notification_text="$notification_text $notifications"
 	updates=
-	if count=$("$bindir/dwm-updates" --count 2>/dev/null); then
+	if count=$("$bindir/dwm-updates" --count 2>/dev/null) && [[ $count =~ ^[1-9][0-9]*$ ]]; then
 		if [ "${1:-}" = color ]; then
 			updates=$(printf '   \036\004\001 %s\037' "$count")
 		else
