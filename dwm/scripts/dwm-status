@@ -109,19 +109,27 @@ status() {
 	case "$notifications" in ''|*[!0-9]*) notifications=0 ;; esac
 	notification_text=''
 	[ "$notifications" -eq 0 ] || notification_text="$notification_text $notifications"
+	updates=
+	if count=$("$bindir/dwm-updates" --count 2>/dev/null); then
+		if [ "${1:-}" = color ]; then
+			updates=$(printf '   \036\004\001 %s\037' "$count")
+		else
+			updates="    $count"
+		fi
+	fi
 	if [ "${1:-}" = color ]; then
 		battery color
 		wifi=$(cached wifi-levels 10 "$bindir/dwm-wifi" --color)
 		bluetooth=$("$bindir/dwm-bluetooth" --color)
-		printf "%s   \\001%s %s\\001   \\001%s %s\\001   %s   %s   \\032%s\\033   \\034%s\\035   \\026%s %s\\027\n" \
-			"$battery_text" "$audio_icon" "$audio_text" "$light_icon" "$light_text" "$wifi" "$bluetooth" "$weather" "$notification_text" "$clock_icon" \
+		printf "%s   \\001%s %s\\001   \\001%s %s\\001   %s   %s   \\032%s\\033   \\034%s\\035%s   \\026%s %s\\027\n" \
+			"$battery_text" "$audio_icon" "$audio_text" "$light_icon" "$light_text" "$wifi" "$bluetooth" "$weather" "$notification_text" "$updates" "$clock_icon" \
 			"$(date '+%m/%d/%Y %I:%M %p' | tr '[:upper:]' '[:lower:]')"
 	else
 		battery
 		wifi=$("$bindir/dwm-wifi")
 		bluetooth=$("$bindir/dwm-bluetooth" --status)
-		printf '%s   %s %s   %s %s   %s   %s   \032%s\033   \034%s\035   %s %s\n' \
-			"$battery_text" "$audio_icon" "$audio_text" "$light_icon" "$light_text" "$wifi" "$bluetooth" "$weather" "$notification_text" "$clock_icon" \
+		printf '%s   %s %s   %s %s   %s   %s   \032%s\033   \034%s\035%s   %s %s\n' \
+			"$battery_text" "$audio_icon" "$audio_text" "$light_icon" "$light_text" "$wifi" "$bluetooth" "$weather" "$notification_text" "$updates" "$clock_icon" \
 			"$(date '+%m/%d/%Y %I:%M %p' | tr '[:upper:]' '[:lower:]')"
 	fi
 }
@@ -266,7 +274,12 @@ case "${1:-}" in
 		monitor=$!
 	fi
 	previous=
+	next_update_check=0
 	while :; do
+		if [ "$SECONDS" -ge "$next_update_check" ]; then
+			"$bindir/dwm-updates" --check 3>&- >/dev/null 2>&1 &
+			next_update_check=$((SECONDS + 900))
+		fi
 		check_battery
 		current=$(status color)
 		if [ "$current" != "$previous" ]; then

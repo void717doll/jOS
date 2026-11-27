@@ -1,0 +1,94 @@
+#!/bin/sh
+set -eu
+export LC_ALL=C
+
+if command -v pacman >/dev/null 2>&1; then
+	manager=pacman
+elif command -v apt-get >/dev/null 2>&1; then
+	manager=apt
+elif command -v dnf >/dev/null 2>&1; then
+	manager=dnf
+else
+	exit 1
+fi
+
+directory=${XDG_RUNTIME_DIR:-${XDG_CACHE_HOME:-"$HOME/.cache"}}/dwm/updates
+packages=$directory/$manager
+
+check() (
+	mkdir -p "$directory"
+	exec 9>"$packages.lock"
+	flock 9
+	temporary=$(mktemp "$packages.XXXXXX")
+	trap 'rm -f "$temporary"' EXIT
+	trap 'exit 1' HUP INT TERM
+	result=0
+	case "$manager" in
+	pacman)
+		timeout 45 checkupdates --nocolor > "$temporary" || result=$?
+		[ "$result" -ne 2 ] || result=0
+		;;
+	apt)
+		if output=$(timeout 45 apt-get -s upgrade); then
+			printf '%s\n' "$output" | sed -n 's/^Inst //p' > "$temporary"
+		else
+			result=$?
+		fi
+		;;
+	dnf)
+		if output=$(timeout 45 dnf -q --refresh repoquery --upgrades --queryformat 'update:%{name}.%{arch} %{evr}\n'); then
+			printf '%s\n' "$output" | sed -n 's/^update://p' | sort -u > "$temporary"
+		else
+			result=$?
+		fi
+		;;
+	esac
+	if [ "$result" -ne 0 ]; then
+		rm -f "$packages"
+		return 1
+	fi
+	mv -f "$temporary" "$packages"
+)
+
+case "${1:-}" in
+--check) check ;;
+--count)
+	if [ -r "$packages" ]; then
+		wc -l < "$packages"
+	else
+		printf '?\n'
+	fi
+	;;
+--install)
+	result=0
+	case "$manager" in
+	pacman) sudo pacman -Syu || result=$? ;;
+	apt) { sudo apt-get update && sudo apt-get upgrade; } || result=$? ;;
+	dnf) sudo dnf upgrade --refresh || result=$? ;;
+	esac
+	check || :
+	[ "$result" -eq 0 ] || printf '\nupdate exited with status %s\n' "$result"
+	printf '\npress enter to close '
+	read -r answer || :
+	exit "$result"
+	;;
+'')
+	while :; do
+		choice=$(printf 'cancel\nlist packages\nupdate\n' | dmenu -i -p 'updates:') || exit 0
+		case "$choice" in
+		'list packages')
+			if [ ! -r "$packages" ]; then
+				printf 'update list unavailable\n'
+			elif [ ! -s "$packages" ]; then
+				printf 'no packages to update\n'
+			else
+				cat "$packages"
+			fi | dmenu -i -l 12 -p 'packages:' >/dev/null || :
+			;;
+		update) exec st -n dwm-updates -T 'system updates' -e "$0" --install ;;
+		*) exit 0 ;;
+		esac
+	done
+	;;
+*) exit 1 ;;
+esac

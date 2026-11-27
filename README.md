@@ -9,6 +9,11 @@ configs are bundled in `dwm/dunstrc` and `dwm/redshift.conf`.
 while an MPRIS player is playing, jOS pauses idle locking and blanking; after
 playback stops, the idle timer restarts.
 
+the green up arrow shows pending system package updates. click it to list
+packages or open an update in `st`. it checks every 15 minutes and supports
+apt, pacman (`pacman-contrib`), and dnf. apt counts from the local package
+index. choosing `update` refreshes the index before upgrading.
+
 ## install
 
 on debian, ubuntu, or arch, run:

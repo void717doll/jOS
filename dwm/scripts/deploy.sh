@@ -60,7 +60,7 @@ if [ "$dependencies" = true ]; then
 			dolphin gimp nextcloud-desktop gnome-keyring libpam-gnome-keyring
 		;;
 	*arch*)
-		sudo pacman -S --needed --noconfirm git base-devel pkgconf ncurses libx11 libxinerama libxft libxrandr libxext \
+		sudo pacman -S --needed --noconfirm git base-devel pkgconf pacman-contrib ncurses libx11 libxinerama libxft libxrandr libxext \
 			libxrender libxcrypt fontconfig freetype2 perl python xdg-utils bash util-linux systemd udisks2 glib2 dbus \
 			dunst picom redshift xwallpaper xorg-xrandr xorg-xsetroot xorg-xset xorg-xinput xorg-xinit xorg-server \
 			ttf-dejavu networkmanager bluez lxsession iputils libpulse sound-theme-freedesktop brightnessctl copyq xss-lock flameshot \
