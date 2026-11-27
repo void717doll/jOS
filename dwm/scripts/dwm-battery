@@ -1,0 +1,96 @@
+#!/usr/bin/env python3
+from datetime import datetime
+import fcntl
+import os
+from pathlib import Path
+import shutil
+import subprocess
+import sys
+import tempfile
+
+
+state = Path(os.environ.get('XDG_STATE_HOME') or Path.home() / '.local/state') / 'dwm'
+history = state / 'battery-history.tsv'
+
+
+def batteries():
+    for device in sorted(Path('/sys/class/power_supply').glob('*')):
+        try:
+            if (device / 'type').read_text().strip() != 'Battery':
+                continue
+            present = device / 'present'
+            if present.exists() and present.read_text().strip() != '1':
+                continue
+            percent = int((device / 'capacity').read_text())
+            status = (device / 'status').read_text().strip().lower()
+        except (OSError, ValueError):
+            continue
+        if 0 <= percent <= 100:
+            yield device.name, percent, status
+
+
+def records():
+    try:
+        return history.read_text().splitlines()
+    except FileNotFoundError:
+        return []
+
+
+def sample():
+    readings = list(batteries())
+    if not readings:
+        return
+    state.mkdir(parents=True, exist_ok=True)
+    with (state / 'battery-history.lock').open('a') as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        rows = records()
+        last = {}
+        for row in rows:
+            fields = row.split('\t', 3)
+            if len(fields) == 4:
+                last[fields[1]] = fields[2:]
+        now = datetime.now().strftime('%Y-%m-%d %H:%M')
+        changes = [f'{now}\t{name}\t{percent}\t{status}'
+                   for name, percent, status in readings
+                   if last.get(name) != [str(percent), status]]
+        if changes:
+            with tempfile.NamedTemporaryFile(mode='w', dir=state, delete=False) as staged:
+                try:
+                    staged.write('\n'.join((rows + changes)[-1000:]) + '\n')
+                    staged.close()
+                    os.replace(staged.name, history)
+                finally:
+                    Path(staged.name).unlink(missing_ok=True)
+
+
+def show():
+    lines = ['battery history', '']
+    for name, percent, status in batteries():
+        lines.append(f'now: {name}  {percent}%  {status}')
+    lines += ['', 'recent changes (newest first)', '']
+    for row in reversed(records()):
+        fields = row.split('\t', 3)
+        if len(fields) != 4:
+            continue
+        when, name, percent, status = fields
+        lines.append(f'{when}  {name:8}  {percent:>3}%  {status}')
+    if lines[-1] == '':
+        lines.append('no battery readings saved yet')
+    output = '\n'.join(lines) + '\n'
+    if sys.stdout.isatty() and shutil.which('less'):
+        subprocess.run(['less', '-X'], input=output, text=True)
+    else:
+        print(output, end='')
+        if sys.stdin.isatty():
+            input('\npress enter to close ')
+
+
+if sys.argv[1:] == ['--sample']:
+    sample()
+elif sys.argv[1:] == ['--show']:
+    show()
+elif len(sys.argv) == 1:
+    os.execlp('st', 'st', '-c', 'dwm-battery', '-t', 'battery history', '-g', '62x24',
+              '-e', str(Path(__file__).resolve()), '--show')
+else:
+    sys.exit('usage: dwm-battery [--sample|--show]')

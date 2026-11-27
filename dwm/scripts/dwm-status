@@ -121,7 +121,7 @@ status() {
 		battery color
 		wifi=$(cached wifi-levels 10 "$bindir/dwm-wifi" --color)
 		bluetooth=$("$bindir/dwm-bluetooth" --color)
-		printf "%s   \\001%s %s\\001   \\001%s %s\\001   %s   %s   \\032%s\\033%s%s   \\026%s %s\\027\n" \
+		printf "\\017%s\\020   \\001%s %s\\001   \\001%s %s\\001   %s   %s   \\032%s\\033%s%s   \\026%s %s\\027\n" \
 			"$battery_text" "$audio_icon" "$audio_text" "$light_icon" "$light_text" "$wifi" "$bluetooth" "$weather" "$notification_text" "$updates" "$clock_icon" \
 			"$(date '+%m/%d/%Y %I:%M %p' | tr '[:upper:]' '[:lower:]')"
 	else
@@ -275,10 +275,15 @@ case "${1:-}" in
 	fi
 	previous=
 	next_update_check=0
+	next_battery_sample=0
 	while :; do
 		if [ "$SECONDS" -ge "$next_update_check" ]; then
 			"$bindir/dwm-updates" --check 3>&- >/dev/null 2>&1 &
 			next_update_check=$((SECONDS + 900))
+		fi
+		if [ "$SECONDS" -ge "$next_battery_sample" ]; then
+			"$bindir/dwm-battery" --sample 3>&- >/dev/null 2>&1 &
+			next_battery_sample=$((SECONDS + 60))
 		fi
 		check_battery
 		current=$(status color)

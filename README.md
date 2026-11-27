@@ -4,6 +4,9 @@ a small x11 desktop bundle.
 
 configs are bundled in `dwm/dunstrc` and `dwm/redshift.conf`.
 
+click the battery to open its history in `st`. jOS checks once a minute and
+saves the last 1,000 changes in charge percentage or charging state.
+
 ## install
 
 on debian, ubuntu, or arch, run:

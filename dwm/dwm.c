@@ -77,7 +77,7 @@ enum { NetSupported, NetWMName, NetWMState, NetWMCheck,
 	NetWMWindowTypeDialog, NetClientList, NetWMFrameExtents, NetLast }; /* EWMH atoms */
 enum { Manager, Xembed, XembedInfo, XLast };
 enum { WMProtocols, WMDelete, WMState, WMTakeFocus, WMLast }; /* default atoms */
-enum { ClkTagBar, ClkLtSymbol, ClkStatusText, ClkWifi, ClkBluetooth, ClkWeather, ClkClock, ClkNotifications, ClkUpdates, ClkWinTitle,
+enum { ClkTagBar, ClkLtSymbol, ClkStatusText, ClkBattery, ClkWifi, ClkBluetooth, ClkWeather, ClkClock, ClkNotifications, ClkUpdates, ClkWinTitle,
 	ClkClientWin, ClkRootWin, ClkLast }; /* clicks */
 
 typedef union {
@@ -326,6 +326,7 @@ static char stext[256];
 static int wifistart = -1, wifiend = -1;
 static int bluetoothstart = -1, bluetoothend = -1;
 static int updatesstart = -1, updatesend = -1;
+static int batterystart = -1, batteryend = -1;
 static int weatherstart = -1, weatherend = -1;
 static int clockstart = -1, clockend = -1;
 static int notificationsstart = -1, notificationsend = -1;
@@ -568,7 +569,9 @@ buttonpress(XEvent *e)
 			click = ClkLtSymbol;
 		else if (ev->x >= statusx) {
 			click = ClkStatusText;
-			if (wifistart >= 0 && ev->x >= statusx + wifistart && ev->x < statusx + wifiend)
+			if (batterystart >= 0 && ev->x >= statusx + batterystart && ev->x < statusx + batteryend)
+				click = ClkBattery;
+			else if (wifistart >= 0 && ev->x >= statusx + wifistart && ev->x < statusx + wifiend)
 				click = ClkWifi;
 			else if (bluetoothstart >= 0 && ev->x >= statusx + bluetoothstart && ev->x < statusx + bluetoothend)
 				click = ClkBluetooth;
@@ -933,12 +936,17 @@ statusbar(int x, int draw)
 	clockstart = clockend = -1;
 	notificationsstart = notificationsend = -1;
 	updatesstart = updatesend = -1;
+	batterystart = batteryend = -1;
 	while (*p) {
 		if (*p < 32) {
 			if (*p == 7)
 				wifistart = x - start;
 			else if (*p == 8)
 				wifiend = x - start;
+			else if (*p == 15)
+				batterystart = x - start;
+			else if (*p == 16)
+				batteryend = x - start;
 			else if (*p == 22)
 				clockstart = x - start;
 			else if (*p == 23)

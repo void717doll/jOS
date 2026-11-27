@@ -86,7 +86,7 @@ esac
     run('--refresh', MUTE='yes')
     bar = Path(str(trace) + '.bar').read_text()
     assert '   \x01 30%\x01   ' in bar
-    assert '\x01 \x0473%\x01   \x01 muted\x01' in bar
+    assert '\x0f\x01 \x0473%\x01\x10   \x01 muted\x01' in bar
     assert '\x18\x04 on\x19\x01' in bar
     run('--refresh', BLUETOOTH_STATE='no')
     assert '\x18\x05 off\x19\x01' in Path(str(trace) + '.bar').read_text()
@@ -101,7 +101,7 @@ esac
         timestamp = str(2000 + frame * 2)
         assert run('--once', MUTE='yes', TEST_TIME=timestamp).startswith(f'{icon} 73%    muted   ')
         run('--refresh', TEST_TIME=timestamp)
-        assert f'\x01{icon} \x0473%\x01   ' in Path(str(trace) + '.bar').read_text()
+        assert f'\x0f\x01{icon} \x0473%\x01\x10   ' in Path(str(trace) + '.bar').read_text()
     (battery / 'status').write_text('Discharging\n')
     assert run('--once', TEST_TIME='2000').startswith(' 73%   ')
     (battery / 'status').write_text('Full\n')
@@ -115,7 +115,7 @@ esac
     run('--refresh', TEST_TIME='2000')
     bar = Path(str(trace) + '.bar').read_text()
     assert '\x01 \x0473%\x01' in bar
-    assert '\x01 \x034%\x01   ' in bar
+    assert '\x01 \x034%\x01\x10   ' in bar
     (second / 'present').write_text('0\n')
     (battery / 'present').write_text('0\n')
     assert run('--once').startswith('   ')
