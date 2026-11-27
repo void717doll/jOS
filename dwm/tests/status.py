@@ -69,7 +69,7 @@ esac
         return subprocess.run([status, *args], env=dict(env, **values), check=True,
                               capture_output=True, text=True, timeout=10).stdout.strip()
 
-    assert run('--once') == ' 73%    50%    30%    -    on   \x1a +72°F sunny\x1b   \x1c\x1d    10/05/2026 09:07 pm'
+    assert run('--once') == ' 73%    50%    30%    -    on   \x1a +72°F sunny\x1b    10/05/2026 09:07 pm'
     run('--check-battery')
     assert not trace.exists(), 'initial ac state should not notify'
     (mains / 'online').write_text('1\n')
@@ -228,7 +228,7 @@ esac
     script(bindir / 'pactl', 'exit 1\n')
     script(bindir / 'brightnessctl', 'exit 1\n')
     script(bindir / 'xbacklight', 'exit 1\n')
-    assert run('--once') == '    n/a    n/a    -    on   \x1a +72°F sunny\x1b   \x1c\x1d    10/05/2026 09:07 pm'
+    assert run('--once') == '    n/a    n/a    -    on   \x1a +72°F sunny\x1b    10/05/2026 09:07 pm'
 
     (battery / 'present').write_text('1\n')
     (battery / 'capacity').write_text('70\n')
