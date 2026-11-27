@@ -17,7 +17,7 @@ while [ "$#" -gt 0 ]; do
 	--help)
 		printf 'usage: ./deploy.sh [--deps] [--session] [--lock] [--fonts]\n\n'
 		printf 'build and install the jOS desktop bundle to PREFIX (default: ~/.local).\n'
-		printf 'normal installs also install the bin capture helpers using sudo.\n'
+		printf 'normal installs clone or update ~/bin and install its helpers using sudo.\n'
 		printf '  --deps     install debian, ubuntu, or arch dependencies using sudo\n'
 		printf '  --session  add jOS to the system x11 session menu using sudo\n'
 		printf '  --fonts    download and install the ttf-all-the-icons font collection\n'
@@ -74,12 +74,29 @@ if [ "$dependencies" = true ]; then
 	fi
 fi
 if [ -z "${DESTDIR:-}" ]; then
-	bin_checkout=$(mktemp -d)
-	trap 'rm -rf -- "$bin_checkout"' EXIT
+	bin_repo=https://github.com/void717doll/bin
+	bin_checkout=$HOME/bin
+	if [ -e "$bin_checkout" ] || [ -L "$bin_checkout" ]; then
+		origin=
+		if [ -e "$bin_checkout/.git" ]; then
+			origin=$(git -C "$bin_checkout" config --local --get remote.origin.url) || origin=
+		fi
+		case "$origin" in
+		"$bin_repo"|"$bin_repo.git"|git:void717doll/bin.git|git@github.com:void717doll/bin.git)
+			git -C "$bin_checkout" pull --ff-only
+			;;
+		*) printf 'jOS: %s already exists and is not a checkout of %s\n' "$bin_checkout" "$bin_repo" >&2; exit 1 ;;
+		esac
+	else
+		git clone --depth 1 "$bin_repo" "$bin_checkout"
+	fi
+	bin_stage=$(mktemp -d)
+	trap 'rm -rf -- "$bin_stage"' EXIT
 	trap 'exit 1' HUP INT TERM
-	git clone --depth 1 https://github.com/void717doll/bin "$bin_checkout/bin"
+	git -C "$bin_checkout" archive --format=tar -o "$bin_stage/bin.tar" HEAD
+	tar -xf "$bin_stage/bin.tar" -C "$bin_stage"
 	(
-		cd "$bin_checkout/bin"
+		cd "$bin_stage"
 		# older ss versions pass gui options to the config subcommand.
 		sed -i 's/^flameshot config --showgelp false  gui /flameshot gui /' ss
 		sudo make install

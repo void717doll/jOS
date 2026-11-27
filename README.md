@@ -25,8 +25,9 @@ exec "$HOME/.local/bin/dwm-session"
 ```
 
 install updates with `./deploy.sh`. the default prefix is `~/.local`; set
-`PREFIX` to change it. deploy also clones [bin](https://github.com/void717doll/bin)
-and runs `sudo make install` to install capture helpers in `/usr/local/bin`.
+`PREFIX` to change it. deploy clones [bin](https://github.com/void717doll/bin)
+into `~/bin` or updates the existing checkout, then runs `sudo make install`
+to install capture helpers in `/usr/local/bin`.
 use `DESTDIR` to stage a package without installing the helpers. run
 `./deploy.sh --help` for options.
 
