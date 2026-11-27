@@ -1,18 +1,8 @@
 # jOS
 
-a small x11 desktop bundle. cherry is the nickname for dwm's `[]=` tiling
-mode; berry is the nickname for its `><>` floating mode. it includes five
-workspaces, a launcher, terminal, grouped windows, and a screen locker. wifi,
-bluetooth, weather, and the calendar are on the bar.
-dunst handles notifications, and redshift warms the display overnight. their
-configs are bundled in `dwm/dunstrc` and `dwm/redshift.conf`.
-while an MPRIS player is playing, jOS pauses idle locking and blanking; after
-playback stops, the idle timer restarts.
+a small x11 desktop bundle. 
 
-the green up arrow shows pending system package updates. click it to list
-packages or open an update in `st`. it checks every 15 minutes and supports
-apt, pacman (`pacman-contrib`), and dnf. apt counts from the local package
-index. choosing `update` refreshes the index before upgrading.
+configs are bundled in `dwm/dunstrc` and `dwm/redshift.conf`.
 
 ## install
 
@@ -78,13 +68,6 @@ to move the group.
 dmenu results can be selected by hovering and clicking. the dwm bar leaves
 window titles to tabbed for grouped windows, so the active tab title is not
 shown twice. closing the last tab shuts down its container cleanly.
-
-## checks
-
-github actions builds the tools and runs their test suites on every push and
-pull request. run the same checks locally with `make -C dwm check`,
-`make -C dmenu check`, and `make -C dwm check-x11` (the latter needs `xvfb`
-and `libxtst`).
 
 ## credits
 
